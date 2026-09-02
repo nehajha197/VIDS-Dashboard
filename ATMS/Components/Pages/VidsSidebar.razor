@@ -1,0 +1,372 @@
+﻿@using Microsoft.AspNetCore.Components
+@inject NavigationManager NavigationManager
+@inject SidebarStateService SidebarState
+@implements IDisposable
+
+
+
+    <div class="vids-layout @(SidebarState.IsCollapsed ? "sidebar-collapsed" : "")">
+
+        <aside class="vids-sidebar">
+            <div class="vids-sidebar-top">
+                <div class="sidebar-brand-group">
+                    <div class="sidebar-brand-icon">
+                        <MudIcon Icon="@Icons.Material.Filled.Dashboard" Size="Size.Small" Style="color:#ffffff;" />
+                    </div>
+                    <span class="sidebar-brand">Menu</span>
+                </div>
+            </div>
+
+     <nav class="vids-sidebar-nav">
+
+            <!-- VIDS -->
+            <div class="sidebar-item">
+                <div class="sidebar-item-row @(ActiveMenu == "VIDS" ? "active" : "")" @onclick="OnVIDSClicked">
+                    <div class="sidebar-item-icon-box">
+                        <MudIcon Icon="@Icons.Material.Filled.Videocam" Size="Size.Small" Style="color:#ffffff;" />
+                    </div>
+                    <span class="sidebar-item-label">VIDS</span>
+                </div>
+            </div>
+
+            <!-- Reports -->
+            <div class="sidebar-item">
+                <div class="sidebar-item-row @(ActiveMenu == "Reports" ? "active" : "")" @onclick="OnReportsClicked">
+                    <div class="sidebar-item-icon-box">
+                        <MudIcon Icon="@Icons.Material.Filled.Assessment" Size="Size.Small" Style="color:#ffffff;" />
+                    </div>
+                    <span class="sidebar-item-label">Reports</span>
+                </div>
+            </div>
+
+            <!-- GIS -->
+            <div class="sidebar-item">
+                <div class="sidebar-item-row @(ActiveMenu == "GIS" ? "active" : "")" @onclick="OnGisClicked">
+                    <div class="sidebar-item-icon-box">
+                        <MudIcon Icon="@Icons.Material.Filled.Map" Size="Size.Small" Style="color:#ffffff;" />
+                    </div>
+                    <span class="sidebar-item-label">GIS</span>
+                </div>
+            </div>
+        </nav>
+    </aside>
+
+
+    <div class="vids-main-panel">
+        @ChildContent
+    </div>
+    </div>
+  
+<style>
+    /* ---------- Sidebar Layout ---------- */
+    .vids-layout {
+        display: flex;
+        align-items: stretch;
+        gap: 1.25rem;
+        font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+        margin-left: -2.4rem;
+        margin-right: -1.5rem;
+        padding-left: 0;
+    }
+
+    .vids-sidebar {
+        width: 280px;
+        flex-shrink: 0;
+        background: #ffffff;
+        border: 1px solid #eef0f3;
+        border-radius: 14px;
+        box-shadow: 0 2px 8px rgba(17, 24, 39, 0.04);
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.9rem;
+        position: sticky;
+        top: 1rem;
+        min-height: calc(100vh - 2rem);
+        align-self: stretch;
+        transition: width 0.2s ease, padding 0.2s ease;
+    }
+
+    .vids-main-panel {
+        flex: 1;
+        min-width: 0;
+
+    }
+
+    .vids-layout.sidebar-collapsed {
+        gap: 0;
+    }
+
+        .vids-layout.sidebar-collapsed .vids-sidebar {
+            width: 0;
+            min-width: 0;
+            padding: 0;
+            margin: 0;
+            border: none;
+            box-shadow: none;
+            opacity: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+    /* ---------- Floating "show menu" button (visible only when collapsed) ---------- */
+    .sidebar-float-toggle {
+        position: sticky;
+        top: 1rem;
+        width: 30px;
+        height: 30px;
+        border-radius: 2px;
+        border: 1px;
+        color: black;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        flex-shrink: 0;
+        box-shadow: 0 2px 8px rgba(17, 24, 39, 0.06);
+        opacity: 0;
+        width: 0;
+        padding: 0;
+        border-width: 0;
+        overflow: hidden;
+        pointer-events: none;
+        transition: opacity 0.15s ease, width 0.2s ease, padding 0.2s ease, border-width 0.2s ease;
+    }
+
+        .sidebar-float-toggle.visible {
+            opacity: 1;
+            width: 30px;
+            padding: 0;
+            border-width: 1px;
+            pointer-events: auto;
+            margin-right: 4rem;
+        }
+
+        .sidebar-float-toggle:hover {
+            background: #eef2ff;
+        }
+
+    /* ---------- Top / brand ---------- */
+    .vids-sidebar-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        padding-bottom: 0.9rem;
+        border-bottom: 1px solid #eef0f3;
+    }
+
+    .sidebar-brand-group {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        min-width: 0;
+    }
+
+    .sidebar-brand-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .sidebar-brand {
+        font-size: 1rem;
+        font-weight: 800;
+        color: #111827;
+        letter-spacing: -0.01em;
+        white-space: nowrap;
+    }
+
+    .sidebar-toggle-btn {
+        width: 25px;
+        height: 25px;
+        border-radius: 4px;
+        border: none;
+        color: black;
+        display: flex;
+        align-items: flex-start;
+        justify-content: left;
+        cursor: pointer;
+        flex-shrink: 4;
+        transition: background 0.15s ease, transform 0.15s ease;
+    }
+
+        .sidebar-toggle-btn:hover {
+           
+            transform: translateY(-1px);
+        }
+
+    /* ---------- Nav ---------- */
+    .vids-sidebar-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        padding-top: 0.5rem;
+    }
+
+    .sidebar-item + .sidebar-item {
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid #f3f4f6;
+    }
+
+    .sidebar-item-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.85rem 0.9rem;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: background 0.15s ease, transform 0.15s ease;
+    }
+
+        .sidebar-item-row:hover {
+            background: #f3f4f6;
+            transform: translateX(2px);
+        }
+/* 
+        .sidebar-item-row.active {
+            background: #eef2ff;
+        } */
+
+            .sidebar-item-row.active .sidebar-item-label {
+                color: #4f46e5;
+            }
+ 
+    .sidebar-item-icon-box {
+        width: 30px;
+        height: 30px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    }
+
+    .sidebar-item-label {
+        flex: 1;
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #374151;
+        white-space: nowrap;
+    }
+
+    .sidebar-chevron {
+        color: #9ca3af !important;
+        flex-shrink: 0;
+        transition: transform 0.2s ease;
+    }
+
+        .sidebar-chevron.open {
+            transform: rotate(180deg);
+        }
+
+    /* ---------- Submenu ---------- */
+    .sidebar-submenu {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        margin: 0.4rem 0 0.3rem 2.55rem;
+    }
+
+    .sidebar-submenu-item {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        padding: 0.5rem 0.65rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 500;
+      
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+    }
+
+        .sidebar-submenu-item:hover {
+            background: #eef2ff;
+            color: #4f46e5;
+        }
+
+        .sidebar-submenu-item.active {
+            background: #eef2ff;
+            color: #4f46e5;
+            font-weight: 700;
+        }
+
+    @@media (max-width: 900px) {
+        .vids-layout {
+            flex-direction: column;
+        }
+
+        .vids-sidebar {
+            width: 100%;
+            position: static;
+        }
+
+        .vids-layout.sidebar-collapsed .vids-sidebar {
+            width: 0;
+        }
+
+        .sidebar-float-toggle {
+            position: static;
+        }
+    }
+</style>
+
+@code {
+    /// <summary>
+    /// The page content to render next to the sidebar.
+    /// Usage: &lt;VidsSidebar&gt; ... your page markup ... &lt;/VidsSidebar&gt;
+    /// </summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private void OnVIDSClicked()
+    {
+        NavigationManager.NavigateTo("/"); // replace with your actual route
+    }
+    /// <summary>Route the "Reports" submenu item navigates to.</summary>
+    [Parameter]
+    public string ReportsRoute { get; set; } = "/vids-report";
+
+    /// <summary>Route the "GIS" menu item navigates to.</summary>
+    [Parameter]
+    public string GisRoute { get; set; } = "/gisdashboard";
+
+    /// <summary>Optional: highlight the parent menu item ("VIDS" or "GIS").</summary>
+    [Parameter]
+    public string ActiveMenu { get; set; } = "VIDS";
+
+    /// <summary>Optional: highlight the active submenu item under VIDS (e.g. "Reports").</summary>
+    [Parameter]
+    public string? ActiveSubmenu { get; set; }
+
+    private bool isVidsSubmenuOpen = true;
+
+    protected override void OnInitialized()
+    {
+        SidebarState.OnChange += StateHasChanged;
+    }
+
+    public void Dispose()
+    {
+        SidebarState.OnChange -= StateHasChanged;
+    }
+
+
+    private void OnReportsClicked()
+    {
+        NavigationManager.NavigateTo(ReportsRoute);
+    }
+
+    private void OnGisClicked()
+    {
+        NavigationManager.NavigateTo(GisRoute);
+    }
+}

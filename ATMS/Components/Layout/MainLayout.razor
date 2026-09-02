@@ -1,0 +1,79 @@
+﻿@inherits LayoutComponentBase
+@using ATMS.Interfaces
+@using static ATMS.DTOs.DTO
+@using ATMS.Components.Layout
+
+
+<MudThemeProvider />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<div class="page">
+    @* <div class="sidebar">
+        <NavMenu />
+    </div> *@
+
+    <main>
+        <div class="top-row px-4">
+            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank"></a>
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+ </div>
+
+@*  <div class="layout-container">
+
+    <MudThemeProvider />
+    <MudPopoverProvider />
+    <MudDialogProvider />
+    <MudSnackbarProvider />
+
+    <MainHeader OnMenuClick="ToggleSidebar"
+                ProjectName="@_header.ProjectName"
+                OrgCode="@_header.OrgCode" />
+
+    <MudDrawerContainer>
+
+        <MudDrawer @bind-Open="drawerOpen"
+                   Variant="DrawerVariant.Responsive"
+                   Elevation="1">
+            <MudNavMenu>
+                <MudNavLink Href="/" Icon="@Icons.Material.Filled.Dashboard">
+                    Dashboard
+                </MudNavLink>
+                <MudNavLink Href="/vids" Icon="@Icons.Material.Filled.Videocam">
+                    VIDS
+                </MudNavLink>
+            </MudNavMenu>
+        </MudDrawer>
+
+        <MudMainContent Class="main-content">
+            @Body
+        </MudMainContent>
+
+    </MudDrawerContainer>
+
+</div> *@
+
+@code {
+    [Inject] private IVidsDataService VidsDataService { get; set; } = default!;
+
+    private bool drawerOpen = true;
+    private MainHeaderDto _header = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _header = await VidsDataService.GetActiveProjectHeaderAsync();
+    }
+
+    private void ToggleSidebar() => drawerOpen = !drawerOpen;
+}

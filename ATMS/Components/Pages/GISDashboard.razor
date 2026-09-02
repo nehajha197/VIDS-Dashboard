@@ -1,0 +1,94 @@
+﻿@page "/gisdashboard"
+@inject IJSRuntime JS
+@inject IDialogService DialogService
+@using ATMS.DTOs
+@using MudBlazor
+@inject ISnackbar Snackbar
+@implements IDisposable
+@inject ATMS.Components.Services.AtmsDeviceService atmsDeviceService
+
+<div id="map" style="height: 670px; width: 100%;"></div>
+
+@code {
+    private List<AtmsDeviceDto> devices = new();
+    private DotNetObjectReference<GISDashboard>? dotNetRef;   
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            devices = (await atmsDeviceService.GetDevicesAsync(
+            new AtmsDeviceFilterDto { DeviceType = null, Status = null } 
+            )).ToList();
+
+            dotNetRef = DotNetObjectReference.Create(this);
+
+            await JS.InvokeVoidAsync("initGisMap", "map", 28.4595, 77.0266, 11);
+            await JS.InvokeVoidAsync("registerDotNetHelper", dotNetRef); 
+            await JS.InvokeVoidAsync("addCameraMarkers", devices);
+            await JS.InvokeVoidAsync("enableMapClickToAdd");
+        }
+    }
+
+    // CHANGED: this is called FROM JavaScript when "Watch Live Feed" is clicked
+    [JSInvokable]
+    public async Task OpenLiveVideo(string deviceEndpoint, string deviceName)
+    {
+        // Build the actual video/stream URL from the device's IP endpoint.
+        // Adjust this to however your video source actually works (RTSP->HLS proxy, MP4 clip server, etc.)
+        var videoUrl = "https://videos.pexels.com/video-files/31654691/13487016_1920_1080_25fps.mp4";
+        var posterUrl = "https://images.pexels.com/videos/31654691/4k-drone-4k-drone-footage-aerial-by-drone-crowed-drone-shot-31654691.jpeg?auto=compress&w=1260&h=750";
+ 
+        var parameters = new DialogParameters<VideoPreviewDialog>
+        {
+            { x => x.VideoUrl, videoUrl },
+            { x => x.Title, deviceName },
+            { x => x.PosterUrl, "" } 
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+
+        await DialogService.ShowAsync<VideoPreviewDialog>("Live Video", parameters, options);
+    }
+    // ADDED: called from JS when the map is clicked, with the clicked lat/lng
+    [JSInvokable]
+    public async Task OnMapClicked(double lat, double lng)
+    {
+        var newDevice = new AtmsDeviceCreateDto
+        {
+            Latitude = lat,
+            Longitude = lng,
+            Status = "Online"
+        };
+
+        var parameters = new DialogParameters<AddDeviceDialog>
+        {
+            { x => x.Device, newDevice }
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<AddDeviceDialog>("Add Device", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled && result.Data is AtmsDeviceCreateDto createdDevice)
+        {
+            await atmsDeviceService.AddDeviceAsync(createdDevice);
+            Snackbar.Add($"Device '{createdDevice.Name}' added successfully.", Severity.Success);
+            // Refresh markers on the map
+            devices = (await atmsDeviceService.GetDevicesAsync (
+                new AtmsDeviceFilterDto { DeviceType = null, Status = null }
+            )).ToList();
+             
+            await JS.InvokeVoidAsync("clearAndReloadMarkers", devices);
+        }
+    }
+    public void Dispose()
+    {
+        dotNetRef?.Dispose();
+    }
+}
+           @* 
+            await JS.InvokeVoidAsync("initGisMap", "map", 28.4595, 77.0266, 11);
+            await JS.InvokeVoidAsync("addCameraMarkers", devices); *@
+        

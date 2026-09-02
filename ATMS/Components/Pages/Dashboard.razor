@@ -1,0 +1,4418 @@
+﻿@page "/"
+@rendermode InteractiveServer  
+@using static ATMS.DTOs.DTO
+@using ATMS.Interfaces
+@implements IDisposable
+@inject IVidsDataService VidsDataService
+@inject IDialogService DialogService
+@inject SidebarStateService SidebarState
+
+
+<PageTitle>VIDS Dashboard</PageTitle>
+
+@using System.Text.Json
+@inject IJSRuntime JS
+
+
+<VidsSidebar ReportsRoute="/vids-report" GisRoute="/gisdashboard"  ActiveMenu="VIDS">
+
+  <div class="@RootCssClass">
+
+            <div class="dashboard-topbar">
+                <div class="dashboard-topbar-left">
+
+                    <button class="sidebar-toggle-btn" @onclick="SidebarState.Toggle" title="Hide menu">
+                        <MudIcon Icon="@Icons.Material.Filled.Menu" Size="Size.Small" />
+                    </button>
+
+                    <div class="dashboard-topbar-icon">
+                        <MudIcon Icon="@Icons.Material.Filled.Dashboard" Style="color:#ffffff;" />
+                    </div>
+                    <div class="dashboard-topbar-text">
+                        <h1>VIDS Dashboard</h1>
+                        <p>Vehicle Intrusion Detection System &middot; Live Overview</p>
+                    </div>
+                </div>
+        
+
+        <div class="dashboard-topbar-right">
+            <div class="dashboard-topbar-right">
+    <!-- Auto-refresh controls -->
+    <div class="auto-refresh-controls">
+       
+        <span class="auto-refresh-status">
+            <span class="auto-refresh-dot @(isAutoRefresh ? "active" : "inactive")"></span>
+           <!-- <span class="">@(isAutoRefresh ? $"Auto-refresh {autoRefreshInterval}s" : "Paused")</span>-->
+        </span>
+    </div>
+
+            <button class="theme-toggle" @onclick="ToggleDarkMode"
+                     title="@(isDarkMode ? "Switch to light mode" : "Switch to dark mode")"
+                     aria-label="Toggle dark mode">
+                <span class="theme-toggle-icon sun">
+                    <MudIcon Icon="@Icons.Material.Filled.LightMode" Size="Size.Small" />
+                </span>
+                <span class="theme-toggle-track @(isDarkMode ? "on" : "")">
+                    <span class="theme-toggle-thumb">
+                        <MudIcon Icon="@(isDarkMode ? Icons.Material.Filled.DarkMode : Icons.Material.Filled.LightMode)" Size="Size.Small" />
+                    </span>
+                </span>
+                <span class="theme-toggle-icon moon">
+                    <MudIcon Icon="@Icons.Material.Filled.DarkMode" Size="Size.Small" />
+                </span>
+            </button>
+        </div>
+    </div>
+    </div>
+    
+
+
+<MudGrid Spacing="3">
+
+    <MudItem xs="12" sm="6" md="4">
+        <MudPaper Elevation="3" Height="250px" Class="pa-4 traffic-card">
+            <div class="traffic-header">
+                <div class="traffic-header-left">
+                    <MudIcon Icon="@Icons.Material.Filled.Traffic" Size="Size.Medium" Class="traffic-icon" />
+                    <h5 class="traffic-title">
+                        Chno By Traffic&nbsp;<span class="traffic-title-value">@ChNoTotal</span>
+                    </h5>
+                </div>
+                <MudChip T="string" Class="traffic-location-chip" Size="Size.Small" Variant="Variant.Outlined">
+                    @TrafficByChNo.Count Location@(TrafficByChNo.Count == 1 ? "" : "s")
+                </MudChip>
+            </div>
+
+            <div class="traffic-rows">
+                @foreach (var item in TrafficByChNo)
+                {
+                    <div class="traffic-row">
+                        <div class="traffic-row-bar"></div>
+                        <MudIcon Icon="@Icons.Material.Filled.AltRoute" Size="Size.Small" Class="traffic-row-icon" />
+                        <span class="traffic-row-label">@item.LocationCode</span>
+                        <MudChip T="string" Class="traffic-count-pill" Size="Size.Small">
+                            @item.Count.ToString("N0")
+                        </MudChip>
+                    </div>
+                }
+            </div>
+        </MudPaper>
+    </MudItem>
+    
+ <MudItem xs="12" sm="6" md="4">
+        <MudPaper Elevation="3" Height="250px" Class="pa-0">
+            <div class="dvs-page">
+
+                <div class="dvs-header">
+                    <div class="dvs-header-left">
+                        <div class="dvs-header-icon">
+                            <MudIcon Icon="@Icons.Material.Filled.DeviceHub" Size="Size.Small" Style="color:#ffffff;" />
+                        </div>
+                        <div class="dvs-header-text">
+                            <h1>Device Status</h1>
+                            <p>Realtime connectivity overview</p>
+                        </div>
+                    </div>
+                    <!--<span class="dvs-live-badge"><span class="dvs-live-dot"></span>Live</span>-->
+                </div>
+
+                <div class="dvs-body">
+                    <div class="dvs-donut-wrap">
+                        <canvas id="deviceStatusDonutCanvas"></canvas>
+                        <div class="dvs-donut-center">
+                            <span class="dvs-donut-value">@TotalDevices</span>
+                            <span class="dvs-donut-label">Total</span>
+                        </div>
+                    </div>
+
+                    <div class="dvs-stats">
+                        <div class="dvs-stat-row online">
+                            <div class="dvs-stat-row-top">
+                                <span class="dvs-dot online"></span>
+                                <span class="dvs-stat-name">Online</span>
+                                <span class="dvs-stat-count">@OnlineDevices</span>
+                            </div>
+                            <div class="dvs-bar-track">
+                                <div class="dvs-bar-fill online" style="width:@(OnlinePercent)%"></div>
+                            </div>
+                        </div>
+
+                        <div class="dvs-stat-row offline">
+                            <div class="dvs-stat-row-top">
+                                <span class="dvs-dot offline"></span>
+                                <span class="dvs-stat-name">Offline</span>
+                                <span class="dvs-stat-count">@OfflineDevices</span>
+                            </div>
+                            <div class="dvs-bar-track">
+                                <div class="dvs-bar-fill offline" style="width:@(OfflinePercent)%"></div>
+                            </div>
+                        </div>
+
+                        <div class="dvs-uptime">
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Class="dvs-uptime-icon" />
+                            <span>@OnlinePercent.ToString("0.0")% uptime</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" sm="6" md="4">
+        <MudPaper Elevation="3" Height="250px" Class="pa-4 violation-card">
+            <div class="violation-header">
+                <div class="violation-header-icon">
+                    <MudIcon Icon="@Icons.Material.Filled.Shield" Size="Size.Small" Style="color:#ffffff;" />
+                </div>
+                <h5 class="violation-title">Avg Violation &amp; Violations</h5>
+            </div>
+
+            <div class="violation-body">
+                <div class="violation-left">
+                    <div class="violation-icon-circle">
+                        <MudIcon Icon="@Icons.Material.Filled.CarCrash" Size="Size.Large" Style="color:#3b82f6;" />
+                    </div>
+                    <div class="violation-value">@AvgViolationPerHour.ToString("0.00")</div>
+                    <div class="violation-sublabel">violation/h</div>
+                </div>
+
+                <div class="violation-vdivider"></div>
+
+                <div class="violation-right">
+                    <div class="violation-donut-wrap">
+                        <canvas id="violationDonutCanvas"></canvas>
+                        <div class="violation-donut-center">@ViolatedPercentLabel</div>
+                    </div>
+                    <div class="violation-legend">
+                        <div class="violation-legend-item">
+                            <span class="violation-legend-label violated">Violated</span>
+                            <span class="violation-legend-value">@ViolatedCount.ToString("N0")</span>
+                        </div>
+                        <div class="violation-legend-sep"></div>
+                        <div class="violation-legend-item">
+                            <span class="violation-legend-label total">Total</span>
+                            <span class="violation-legend-value">@TotalCount.ToString("N0")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="9" md="6">
+        <MudPaper Elevation="3" Height="300px" Class="pa-0">
+            <div class="avt-page">
+
+                <div class="avt-header">
+                    <div class="avt-header-left">
+                        <div class="avt-header-icon">
+                            <MudIcon Icon="@Icons.Material.Filled.Timeline" Size="Size.Small" Style="color:#ffffff;" />
+                        </div>
+                        <div class="avt-header-text">
+                            <h1>Average Vehicle Traffic</h1>
+                            <p>Hourly average over a 24-hour period</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="avt-stats-row">
+                    <div class="avt-stat peak-hour">
+                        <div class="avt-stat-icon-wrap">
+                            <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" />
+                        </div>
+                        <div class="avt-stat-text">
+                            <span class="avt-stat-value">@GetPeakHour()</span>
+                            <span class="avt-stat-label">Peak Hour</span>
+                        </div>
+                    </div>
+                    <div class="avt-stat peak-count">
+                        <div class="avt-stat-icon-wrap">
+                            <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Small" />
+                        </div>
+                        <div class="avt-stat-text">
+                            <span class="avt-stat-value">@GetPeakValue()</span>
+                            <span class="avt-stat-label">Peak Count</span>
+                        </div>
+                    </div>
+                    <div class="avt-stat avg-hour">
+                        <div class="avt-stat-icon-wrap">
+                            <MudIcon Icon="@Icons.Material.Filled.BarChart" Size="Size.Small" />
+                        </div>
+                        <div class="avt-stat-text">
+                            <span class="avt-stat-value">@GetAverage()</span>
+                            <span class="avt-stat-label">Avg / Hour</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="avt-card">
+                    @if (averageVehicleCount is null || !averageVehicleCount.Any())
+                    {
+                        <div class="avt-empty">
+                            <MudIcon Icon="@Icons.Material.Filled.ShowChart" Size="Size.Medium" Class="avt-empty-icon" />
+                            <p>No traffic data available yet.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="avt-chart-wrap">
+                            <canvas id="avtChartCanvas"></canvas>
+                        </div>
+                    }
+                </div>
+
+            </div>
+        </MudPaper>
+    </MudItem>
+
+<MudItem xs="12" sm="6" md="3">
+        <MudPaper Elevation="3" Height="300px" Class="pa-0">
+            <div class="vcd-page">
+
+                <div class="vcd-header">
+                    <div class="vcd-header-left">
+                        <div class="vcd-header-icon">
+                            <MudIcon Icon="@Icons.Material.Filled.DirectionsCar" Size="Size.Small" Style="color:#ffffff;" />
+                        </div>
+                        <div class="vcd-header-text">
+                            <h1>Vehicle Class Distribution</h1>
+                            <p>@TotalVehicleClassCount.ToString("N0") vehicles classified</p>
+                        </div>
+                    </div>
+                    <button class="vcd-sort-btn" @onclick="ToggleVehicleClassSort">
+                        <MudIcon Icon="@(sortDescending ? Icons.Material.Filled.ArrowDownward : Icons.Material.Filled.ArrowUpward)" Size="Size.Small" />
+                        @(sortDescending ? "Highest" : "Lowest")
+                    </button>
+                </div>
+
+                <div class="vcd-body">
+                    <div class="vcd-donut-wrap">
+                        <canvas id="vehicleClassDonutCanvas"></canvas>
+                        <div class="vcd-donut-center">
+                            <span class="vcd-donut-value">@TotalVehicleClassCount.ToString("N0")</span>
+                            <span class="vcd-donut-label">Total</span>
+                        </div>
+                    </div>
+
+                    <div class="vcd-list">
+                        @foreach (var item in SortedVehicleClasses)
+                        {
+                            <div class="vcd-row">
+                                <div class="vcd-row-icon" style="background:@(item.Color)1a; color:@item.Color;">
+                                    <MudIcon Icon="@item.Icon" Size="Size.Small" />
+                                </div>
+                                <div class="vcd-row-main">
+                                    <div class="vcd-row-top">
+                                        <span class="vcd-row-name">@item.Name</span>
+                                        <span class="vcd-row-count">@item.Count.ToString("N0")</span>
+                                        <span class="vcd-row-pct">@item.Percent.ToString("0.0")%</span>
+                                    </div>
+                                    <div class="vcd-bar-track">
+                                        <div class="vcd-bar-fill" style="width:@(item.Percent)%; background:@item.Color;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+            </div>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" sm="6" md="3">
+    <MudPaper Elevation="3" Height="300px" Class="pa-0">
+        <div class="voc-card">
+
+            <div class="voc-header">
+                <div class="voc-header-left">
+                    <div class="voc-header-icon">
+                        <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Small" Style="color:#ffffff;" />
+                    </div>
+                    <div class="voc-header-text">
+                        <h1>Violation by Category</h1>
+                        <p>Breakdown by event type &amp; vehicle class</p>
+                    </div>
+                </div>  
+            </div>
+
+            <div class="voc-summary">
+                <div class="voc-summary-item">
+                    <span class="voc-summary-value">@GrandTotal.ToString("N0")</span>
+                    <span class="voc-summary-label">Total Violations</span>
+                </div>
+                <div class="voc-summary-divider"></div>
+                <div class="voc-summary-item">
+                    <span class="voc-summary-value">@TopEventType</span>
+                    <span class="voc-summary-label">Top Event Type</span>
+                </div>
+                <div class="voc-summary-divider"></div>
+                <div class="voc-summary-item">
+                    <span class="voc-summary-value">@TopVehicleClass</span>
+                    <span class="voc-summary-label">Top Vehicle Class</span>
+                </div>
+            </div>
+
+            <div class="voc-search-wrap">
+                <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" Class="voc-search-icon" />
+                <input class="voc-search-input"
+                       placeholder="Search event type..."
+                       @bind="vbcSearchTerm"
+                       @bind:event="oninput" />
+                @if (!string.IsNullOrEmpty(vbcSearchTerm))
+                {
+                    <button class="voc-search-clear" @onclick="() => vbcSearchTerm = string.Empty">
+                        <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
+                    </button>
+                }
+            </div>
+
+            <div class="voc-list">
+                @foreach (var row in FilteredViolationRows)
+                {
+                    var pct = GrandTotal == 0 ? 0 : Math.Round((double)row.Total / GrandTotal * 100, 1);
+                    var accent = GetRowAccentColor(row.BadgeClass);
+                    var isOpen = expandedRow == row.EventType;
+
+                    <div class="voc-row @(isOpen ? "expanded" : "")">
+                        <div class="voc-row-header" @onclick="() => ToggleRow(row.EventType)">
+                            <span class="voc-event-badge @row.BadgeClass">@row.EventType</span>
+
+                            <div class="voc-row-bar-track">
+                                <div class="voc-row-bar-fill" style="width:@(pct)%; background:@accent;"></div>
+                            </div>
+
+                            <span class="voc-row-total">@row.Total.ToString("N0")</span>
+                            <span class="voc-row-pct">@(pct.ToString("0.0"))%</span>
+
+                            <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" Class="voc-chevron" />
+                        </div>
+
+                        @if (isOpen)
+                        {
+                            <div class="voc-row-detail">
+                                @{
+                                    var nonZero = row.Values.Where(v => v.Value > 0).OrderByDescending(v => v.Value).ToList();
+                                }
+                                @if (!nonZero.Any())
+                                {
+                                    <div class="voc-detail-empty">No vehicles recorded for this event type.</div>
+                                }
+                                else
+                                {
+                                    @foreach (var kv in nonZero)
+                                    {
+                                        var barPct = row.MaxValue == 0 ? 0 : Math.Round((double)kv.Value / row.MaxValue * 100, 1);
+                                        <div class="voc-detail-item">
+                                            <span class="voc-detail-label">@kv.Key</span>
+                                            <div class="voc-detail-bar-track">
+                                                <div class="voc-detail-bar-fill" style="width:@(barPct)%; background:@accent;"></div>
+                                            </div>
+                                            <span class="voc-detail-value">@kv.Value.ToString("N0")</span>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (!FilteredViolationRows.Any())
+                {
+                    <div class="voc-empty">
+                        <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Medium" Class="voc-empty-icon" />
+                        <p>No matching event types.</p>
+                    </div>
+                }
+            </div>
+
+            <div class="voc-footer">
+                Showing @FilteredViolationRows.Count() of @violationRows.Count event types
+            </div>
+
+        </div>
+    </MudPaper>
+</MudItem>
+
+<MudItem xs="12" sm="9" md="6">
+        <MudPaper Elevation="3" Height="350px" Class="pa-0">
+            <div class="ltx-page">
+
+                <div class="ltx-header">
+                    <div class="ltx-header-left">
+                        <div class="ltx-header-icon">
+                            <MudIcon Icon="@Icons.Material.Filled.ReceiptLong" Size="Size.Small" Style="color:#ffffff;" />
+                        </div>
+                        <div class="ltx-header-text">
+                            <h1>Last Transaction</h1>
+                            <p>Most recent captured event</p>
+                        </div>
+                    </div>
+                    
+                </div>
+
+                <div class="ltx-media-row">
+                <div class="ltx-media-tile" @onclick="ExpandImageMedia">
+                        <img src="@LastTransactionImageUrl" alt="Captured frame" class="ltx-media-img" />
+                        <span class="ltx-media-tag image">
+                            <MudIcon Icon="@Icons.Material.Filled.PhotoCamera" Size="Size.Small" /> Snapshot
+                        </span>
+                        <span class="ltx-media-expand">
+                            <MudIcon Icon="@Icons.Material.Filled.ZoomIn" Size="Size.Small" />
+                        </span>
+                    </div>
+
+                    <div class="ltx-media-tile video-tile"    @onclick="ExpandVideoMedia">
+                        <video class="ltx-media-video" id="ltxVideoPlayer" controls muted preload="metadata" poster="@LastTransactionImageUrl">
+                            <source src="@LastTransactionVideoUrl" type="video/mp4" />
+                        </video>
+                        <span class="ltx-media-tag video">
+                            <MudIcon Icon="@Icons.Material.Filled.Videocam" Size="Size.Small" /> Clip
+                        </span>
+                    </div>
+                </div>
+
+                <div class="ltx-info-row">
+                    <div class="ltx-info-item">
+                        <span class="ltx-info-label">Event Type</span>
+                        <span class="ltx-badge @EventTypeClass">
+                            <MudIcon Icon="@EventTypeIcon" Size="Size.Small" />
+                            @LastTransactionEventType
+                        </span>
+                    </div>
+                    <div class="ltx-info-item">
+                        <span class="ltx-info-label">Vehicle Class</span>
+                        <span class="ltx-badge vclass">
+                            <MudIcon Icon="@Icons.Material.Filled.DirectionsCar" Size="Size.Small" />
+                            @LastTransactionVehicleClass
+                        </span>
+                    </div>
+                    <div class="ltx-info-item">
+                        <span class="ltx-info-label">Location</span>
+                        <span class="ltx-badge location">
+                            <span class="ltx-location-dot" style="background:@LastTransactionLocationColor;"></span>
+                            @LastTransactionLocation
+                        </span>
+                    </div>
+                    <div class="ltx-info-item">
+                        <span class="ltx-info-label">Captured</span>
+                        <span class="ltx-timestamp">
+                            <MudIcon Icon="@Icons.Material.Filled.AccessTime" Size="Size.Small" />
+                            @LastTransactionTime.ToString("dd-MMM-yyyy HH:mm:ss")
+                        </span>
+                    </div>
+                </div>
+
+            </div>
+        </MudPaper>
+    </MudItem> 
+
+   <MudItem xs="12" sm="9" md="6">
+    <MudPaper Elevation="3" Height="350px" Class="pa-4 rvv-card">
+        <div class="rvv-container">
+            <!-- Header -->
+            <div class="rvv-header">
+                <div class="rvv-header-left">
+                    <div class="rvv-header-icon">
+                        <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Style="color:#ffffff;" />
+                    </div>
+                    <div>
+                        <h5 class="rvv-title">Recent Vehicles Violation</h5>
+                        <p class="rvv-subtitle">Latest violation events captured by the system</p>
+                    </div>
+                </div>
+                <div class="rvv-header-right">
+                    <span class="rvv-badge">@violationEvents.Count Events</span>
+                   
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="rvv-table-wrap">
+                <table class="rvv-table">
+                    <thead>
+                        <tr>
+                            <th>Event Type</th>
+                            <th>Vehicle Class</th>
+                            <th>Timestamp</th>
+                            <th>Location</th>
+                            <th>Media</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in violationEvents.Take(5))
+                        {
+                            <tr class="rvv-row" @onclick="() => OnRowClick(item)">
+                                <td>
+                                    <span class="rvv-event-badge @item.EventTypeClass">
+                                        <MudIcon Icon="@GetEventIcon(item.EventType)" Size="Size.Small" Class="extra-small-icon"  />
+                                        @item.EventType
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="rvv-vehicle-class">
+                                        <MudIcon Icon="@GetVehicleIcon(item.VehicleClass)" Size="Size.Small" />
+                                        @item.VehicleClass
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="rvv-timestamp">
+                                        <MudIcon Icon="@Icons.Material.Filled.AccessTime" Size="Size.Small" />
+                                        @item.Timestamp.ToString("dd-MMM-yyyy HH:mm:ss")
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="rvv-location">
+                                        <span class="rvv-location-dot" style="background:@GetLocationColor(item.Location);"></span>
+                                        @item.Location
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="rvv-media-icons">
+                                        <button class="rvv-media-btn image" @onclick:stopPropagation="true" @onclick='() => OpenMedia(item, "image")'>
+                                            <MudIcon Icon="@Icons.Material.Filled.PhotoCamera" Size="Size.Small" />
+                                        </button>
+                                        <button class="rvv-media-btn video" @onclick:stopPropagation="true" @onclick='() => OpenMedia(item, "video")'>
+                                            <MudIcon Icon="@Icons.Material.Filled.Videocam" Size="Size.Small" />
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Footer -->
+            <div class="rvv-footer">
+                <span>Showing @Math.Min(5, violationEvents.Count) of @violationEvents.Count vehicles</span>
+                <button class="rvv-view-all" @onclick="ViewAll">
+                    View All
+                    <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" />
+                </button>
+            </div>
+        </div>
+    </MudPaper>
+</MudItem>
+</MudGrid>
+
+</div>
+</VidsSidebar>
+
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"> </script>
+
+
+<script>
+   window.avtChartInstance = null;
+
+    window.renderAvtChart = (labels, data, isDark) => {
+        const canvas = document.getElementById('avtChartCanvas');
+        if (!canvas) return;
+
+        if (window.avtChartInstance) {
+            window.avtChartInstance.destroy();
+        }
+
+        const ctx = canvas.getContext('2d');
+        const gradient = ctx.createLinearGradient(0, 0, 0, 180);
+        gradient.addColorStop(0, 'rgba(99, 102, 241, 0.38)');
+        gradient.addColorStop(0.6, 'rgba(99, 102, 241, 0.08)');
+        gradient.addColorStop(1, 'rgba(99, 102, 241, 0)');
+
+        const gridColor = isDark ? 'rgba(148, 163, 184, 0.12)' : '#f3f4f6';
+        const tickColor = isDark ? '#94a3b8' : '#9ca3af';
+        const axisColor = isDark ? '#334155' : '#e5e7eb';
+
+        window.avtChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Vehicle Count',
+                    data: data,
+                    borderColor: '#6366f1',
+                    backgroundColor: gradient,
+                    borderWidth: 2.5,
+                    pointRadius: 0,
+                    pointHoverRadius: 6,
+                    pointHoverBackgroundColor: '#ffffff',
+                    pointHoverBorderColor: '#6366f1',
+                    pointHoverBorderWidth: 3,
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        enabled: true,
+                        backgroundColor: '#1e1b4b',
+                        titleColor: '#e0e7ff',
+                        bodyColor: '#ffffff',
+                        bodyFont: { size: 11, weight: 'bold' },
+                        titleFont: { size: 9 },
+                        padding: 10,
+                        cornerRadius: 8,
+                        displayColors: false,
+                        callbacks: {
+                            title: (items) => items[0].label,
+                            label: (item) => item.formattedValue + ' vehicles'
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        border: { color: axisColor },
+                        ticks: { color: tickColor, font: { size: 13,weight:500 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: gridColor },
+                        border: { display: false },
+                        ticks: { color: tickColor, font: { size: 13,weight:500 }, precision: 0, maxTicksLimit: 4 }
+                    }
+                }
+            }
+        });
+    };
+    window.violationDonutInstance = null;
+
+    window.renderViolationDonut = (violatedPercent, isDark) => {
+    const canvas = document.getElementById('violationDonutCanvas');
+    if (!canvas) return;
+
+    if (window.violationDonutInstance) {
+    window.violationDonutInstance.destroy();
+    }
+
+    const ctx = canvas.getContext('2d');
+    const remaining = Math.max(0, 100 - violatedPercent);
+    const borderColor = isDark ? '#1e293b' : '#ffffff';
+
+    window.violationDonutInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+    labels: ['Violated', 'Total'],
+    datasets: [{
+    data: [violatedPercent, remaining],
+    backgroundColor: ['#ef4444', '#3b82f6'],
+    borderWidth: 2,
+    borderColor: borderColor,
+    cutout: '72%'
+    }]
+    },
+    options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+    legend: { display: false },
+    tooltip: {
+    backgroundColor: '#111827',
+    titleColor: '#f9fafb',
+    bodyColor: '#f9fafb',
+    padding: 8,
+    cornerRadius: 8,
+    callbacks: {
+    label: (item) => item.label + ': ' + item.formattedValue + '%'
+    }
+    }
+    }
+    }
+    });
+    };
+
+    window.deviceStatusDonutInstance = null;
+
+    window.renderDeviceStatusDonut = (online, offline, isDark) => {
+        const canvas = document.getElementById('deviceStatusDonutCanvas');
+        if (!canvas) return;
+
+        if (window.deviceStatusDonutInstance) {
+            window.deviceStatusDonutInstance.destroy();
+        }
+
+        const ctx = canvas.getContext('2d');
+        const borderColor = isDark ? '#1e293b' : '#ffffff';
+
+        window.deviceStatusDonutInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Online', 'Offline'],
+                datasets: [{
+                    data: [online, offline],
+                    backgroundColor: ['#10b981', '#ef4444'],
+                    borderWidth: 2,
+                    borderColor: borderColor,
+                    cutout: '74%'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#111827',
+                        titleColor: '#f9fafb',
+                        bodyColor: '#f9fafb',
+                        padding: 8,
+                        cornerRadius: 8,
+                        titleFont: { size: 10 },
+                        bodyFont: { size: 10 },
+                        callbacks: {
+                            label: (item) => item.label + ': ' + item.formattedValue
+                        }
+                    }
+                }
+            }
+        });
+    };
+
+    window.vehicleClassDonutInstance = null;
+
+    window.renderVehicleClassDonut = (labels, data, colors, isDark) => {
+        const canvas = document.getElementById('vehicleClassDonutCanvas');
+        if (!canvas) return;
+
+        if (window.vehicleClassDonutInstance) {
+            window.vehicleClassDonutInstance.destroy();
+        }
+
+        const ctx = canvas.getContext('2d');
+        const borderColor = isDark ? '#1e293b' : '#ffffff';
+
+        window.vehicleClassDonutInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: colors,
+                    borderWidth: 2,
+                    borderColor: borderColor,
+                    cutout: '70%'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#111827',
+                        titleColor: '#f9fafb',
+                        bodyColor: '#f9fafb',
+                        padding: 8,
+                        cornerRadius: 8,
+                        titleFont: { size: 10 },
+                        bodyFont: { size: 10 },
+                        callbacks: {
+                            label: (item) => item.label + ': ' + item.formattedValue
+                        }
+                    }
+                }
+            }
+        });
+    };
+
+    
+    // Function to apply dark mode to entire page
+    window.applyDarkModeToPage = function(isDark) {
+        // Apply to body
+        if (isDark) {
+            document.body.classList.add('dark-mode');
+            document.body.style.backgroundColor = '#0f172a';
+        } else {
+            document.body.classList.remove('dark-mode');
+            document.body.style.backgroundColor = '';
+        }
+        
+        // Apply to main layout
+        const mainElement = document.querySelector('main');
+        if (mainElement) {
+            if (isDark) {
+                mainElement.classList.add('dark-mode');
+                mainElement.style.backgroundColor = '#0f172a';
+            } else {
+                mainElement.classList.remove('dark-mode');
+                mainElement.style.backgroundColor = '';
+            }
+        }
+        
+        // Apply to top row
+        const topRow = document.querySelector('.top-row.px-4');
+        if (topRow) {
+            if (isDark) {
+                topRow.style.backgroundColor = '#0f172a';
+                topRow.style.borderBottom = '1px solid #334155';
+            } else {
+                topRow.style.backgroundColor = '';
+                topRow.style.borderBottom = '';
+            }
+        }
+        
+        // Apply to content
+        const content = document.querySelector('.content.px-4');
+        if (content) {
+            if (isDark) {
+                content.style.backgroundColor = '#0f172a';
+            } else {
+                content.style.backgroundColor = '';
+            }
+        }
+        
+        // Apply to page container
+        const page = document.querySelector('.page');
+        if (page) {
+            if (isDark) {
+                page.style.backgroundColor = '#0f172a';
+            } else {
+                page.style.backgroundColor = '';
+            }
+        }
+        
+        // Save preference
+        localStorage.setItem('vids-theme', isDark ? 'dark' : 'light');
+    };
+
+    // Check and apply dark mode on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        const theme = localStorage.getItem('vids-theme');
+        if (theme === 'dark') {
+            window.applyDarkModeToPage(true);
+        }
+    });
+
+    // Listen for storage changes
+    window.addEventListener('storage', function(e) {
+        if (e.key === 'vids-theme') {
+            const isDark = e.newValue === 'dark';
+            window.applyDarkModeToPage(isDark);
+        }
+    });
+</script>
+
+
+<style>
+    /* ---------- Dashboard Topbar & Theme Toggle ---------- */
+    .vids-dashboard {
+        font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .dashboard-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.9rem 1.1rem;
+        margin-bottom: 1rem;
+        background: #ffffff;
+        border: 1px solid #eef0f3;
+        border-radius: 14px;
+        box-shadow: 0 2px 8px rgba(17, 24, 39, 0.04);
+        transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .dashboard-topbar-left {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        min-width: 0;
+    }
+
+    .dashboard-topbar-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .dashboard-topbar-text h1 {
+        margin: 0;
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #111827;
+        letter-spacing: -0.01em;
+        transition: color 0.25s ease;
+    }
+
+    .dashboard-topbar-text p {
+        margin: 0.1rem 0 0 0;
+        font-size: 0.8rem;
+        color: #9ca3af;
+        transition: color 0.25s ease;
+    }
+
+    .dashboard-topbar-right {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        flex-shrink: 0;
+    }
+
+    .theme-toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        padding: 0.2rem;
+    }
+
+    .theme-toggle-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: color 0.25s ease;
+    }
+
+    .theme-toggle-icon.sun { color: #f59e0b; }
+    .theme-toggle-icon.moon { color: #94a3b8; }
+
+    .theme-toggle-track {
+        position: relative;
+        width: 48px;
+        height: 26px;
+        background: #e5e7eb;
+        border-radius: 999px;
+        padding: 3px;
+        box-sizing: border-box;
+        transition: background 0.25s ease;
+    }
+
+    .theme-toggle-track.on {
+        background: #4f46e5;
+    }
+
+    .theme-toggle-thumb {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .theme-toggle-thumb .mud-icon-root {
+        font-size: 0.7rem !important;
+        color: #4f46e5 !important;
+    }
+
+    .theme-toggle-track.on .theme-toggle-thumb {
+        transform: translateX(22px);
+    }
+
+    .theme-toggle-track.on .theme-toggle-thumb .mud-icon-root {
+        color: #f59e0b !important;
+    }
+
+    @@media (max-width: 640px) {
+        .dashboard-topbar-text p { display: none; }
+    }
+
+     .avc-page {
+        font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+        width: 100%;
+        height: 100%;
+        margin: 0 auto;
+        padding: 0.7rem 0.85rem 0.5rem;
+        color: #1f2937;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+    }
+
+    /* Header */
+    .avc-header-text .avc-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .avc-header-text h1 {
+        font-size: 1rem;
+        font-weight: 700;
+        margin: 0;
+        color: #111827;
+        letter-spacing: -0.01em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .avc-header-text p {
+        margin: 0.1rem 0 0 0;
+        color: #9ca3af;
+        font-size: 0.875rem;
+    }
+
+    /* .avc-live-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: #059669;
+        background: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        border-radius: 999px;
+        padding: 0.1rem 0.5rem;
+        flex-shrink: 0;
+    }
+
+    .avc-live-dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: #10b981;
+        animation: avc-pulse 1.8s ease-in-out infinite;
+    }
+ */
+    @@keyframes avc-pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.45; transform: scale(1.4); }
+    }
+
+    /* Stats row */
+    .avc-stats-row {
+        display: flex;
+        gap: 0.4rem;
+    }
+
+    .avc-stat {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        background: #f9fafb;
+        border: 1px solid #eef0f3;
+        border-radius: 9px;
+        padding: 0.35rem 0.5rem;
+        min-width: 0;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .avc-stat:hover {
+        transform: translateY(-1px);
+        background: #ffffff;
+        border-color: #e0e3ff;
+        box-shadow: 0 3px 8px rgba(79, 70, 229, 0.1);
+    }
+
+    .avc-stat-icon {
+        width: 15px;
+        height: 15px;
+        color: #4f46e5;
+        flex-shrink: 0;
+        opacity: 0.85;
+    }
+
+    .avc-stat-text {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        line-height: 1.15;
+    }
+
+    .avc-stat-value {
+        font-size: 0.875rem;
+        font-weight: 700;
+        color: #111827;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .avc-stat-label {
+        font-size: 0.875rem;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        white-space: nowrap;
+    }
+
+    /* Chart card */
+    .avc-card {
+        background: #ffffff;
+        border-radius: 12px;
+        flex: 1;
+        min-height: 0;
+        display: flex;
+    }
+
+    .avc-chart-wrap {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+    }
+
+    .avc-empty {
+        margin: auto;
+        text-align: center;
+        color: #b0b5bd;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.3rem;
+    }
+
+    .avc-empty-icon {
+        width: 22px;
+        height: 22px;
+    }
+
+    .avc-empty p {
+        margin: 0;
+        font-size: 0.6875rem;
+    }
+
+    @@media (max-width: 640px) {
+        .avc-stat-label {
+            display: none;
+        }
+    }
+
+    /* ---------- Average Vehicle Traffic card (v2) ---------- */
+    .avt-page {
+        font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+        width: 100%;
+        height: 100%;
+        padding: 0.9rem 1.1rem;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 0.65rem;
+        color: #1f2937;
+    }
+
+    .avt-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .avt-header-left {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        min-width: 0;
+    }
+
+    .avt-header-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .avt-header-text h1 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 700;
+        color: #111827;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .avt-header-text p {
+        margin: 0.05rem 0 0 0;
+        font-size: 0.875rem;
+        color: #9ca3af;
+    }
+    .extra-small-icon {
+        font-size: 0.625rem !important; 
+        width: 10px !important;
+        height: 10px !important;
+    }
+
+   /*  .avt-live-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: #059669;
+        background: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        border-radius: 999px;
+        padding: 0.15rem 0.55rem;
+        flex-shrink: 0;
+    }
+
+    .avt-live-dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: #10b981;
+        animation: avt-pulse 1.8s ease-in-out infinite;
+    }
+ */
+    @@keyframes avt-pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.45; transform: scale(1.4); }
+    }
+
+    .avt-stats-row {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .avt-stat {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        border-radius: 10px;
+        padding: 0.4rem 0.6rem;
+        min-width: 0;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.25s ease;
+        border: 1px solid transparent;
+    }
+
+    .avt-stat:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+    }
+
+    .avt-stat.peak-hour { background: #eef2ff; }
+    .avt-stat.peak-hour:hover { border-color: #c7d2fe; }
+    .avt-stat.peak-hour .avt-stat-icon-wrap { background: #6366f1; }
+
+    .avt-stat.peak-count { background: #f0fdf4; }
+    .avt-stat.peak-count:hover { border-color: #bbf7d0; }
+    .avt-stat.peak-count .avt-stat-icon-wrap { background: #10b981; }
+
+    .avt-stat.avg-hour { background: #fff7ed; }
+    .avt-stat.avg-hour:hover { border-color: #fed7aa; }
+    .avt-stat.avg-hour .avt-stat-icon-wrap { background: #f97316; }
+
+    .avt-stat-icon-wrap {
+        width: 24px;
+        height: 24px;
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .avt-stat-icon-wrap .mud-icon-root {
+        font-size: 0.85rem !important;
+        color: #ffffff !important;
+    }
+
+    .avt-stat-text {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        line-height: 1.15;
+    }
+
+    .avt-stat-value {
+        font-size: 0.875rem;
+        font-weight: 700;
+        color: #111827;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .avt-stat-label {
+        font-size: 0.675rem;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        white-space: nowrap;
+    }
+
+    .avt-card {
+        background: #ffffff;
+        border-radius: 12px;
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        transition: background 0.25s ease;
+    }
+
+    .avt-chart-wrap {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+    }
+
+    .avt-empty {
+        margin: auto;
+        text-align: center;
+        color: #b0b5bd;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.3rem;
+    }
+
+    .avt-empty-icon {
+        font-size: 1.5rem !important;
+        color: #d1d5db !important;
+    }
+
+    .avt-empty p {
+        margin: 0;
+        font-size: 0.6875rem;
+    }
+
+    @@media (max-width: 640px) {
+        .avt-stat-label { display: none; }
+    }
+
+
+    /* ---------- Traffic By ChNo card ---------- */
+    .traffic-card {
+    font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+    display: flex;
+    flex-direction: column;
+    }
+
+    .traffic-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+    }
+
+    .traffic-header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+    }
+
+    .traffic-icon {
+    color: #111827;
+    flex-shrink: 0;
+    font-size: 1.25rem !important;
+    transition: color 0.25s ease;
+    }
+
+    .traffic-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #111827;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color 0.25s ease;
+    }
+
+    .traffic-title-value {
+    color: #111827;
+    font-weight: 700;
+    transition: color 0.25s ease;
+    }
+
+    .traffic-location-chip.mud-chip {
+    border-color: #4f46e5 !important;
+    color: #4f46e5 !important;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: 999px !important;
+    flex-shrink: 0;
+    }
+
+    .traffic-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    overflow-y: auto;
+    }
+
+    .traffic-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: #f9fafb;
+    border-radius: 10px;
+    padding: 0.65rem 0.85rem 0.65rem 1.1rem;
+    transition: background 0.25s ease;
+    }
+
+    .traffic-row-bar {
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    border-radius: 3px;
+    background: #7c3aed;
+    }
+
+    .traffic-row-icon {
+    color: #7c3aed;
+    flex-shrink: 0;
+    font-size: 1.5rem !important;
+
+    }
+
+    .traffic-row-label {
+    flex: 1;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #4b5563;
+    transition: color 0.25s ease;
+    }
+
+    .traffic-count-pill.mud-chip {
+    background: #2f8fef !important;
+    color: #ffffff !important;
+    font-size: 0.875rem;
+    font-weight: 400;
+    border-radius: 999px !important;
+    min-width: 70px;
+    justify-content: center;
+    }
+
+    /* ---------- Avg Violation & Violations card ---------- */
+    .violation-card {
+    font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+    display: flex;
+    flex-direction: column;
+    }
+
+    .violation-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid #e5e7eb;
+    transition: border-color 0.25s ease;
+    }
+
+    .violation-header-icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: #111827;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    }
+
+    .violation-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #111827;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color 0.25s ease;
+    }
+
+    .violation-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 0;
+    }
+
+    .violation-left {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    }
+
+    .violation-icon-circle {
+    width: 50px !important;
+    height: 50px !important;
+    border-radius: 50%;
+    background: #dbeafe;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.25s ease;
+    }
+
+    .violation-value {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #111827;
+    transition: color 0.25s ease;
+    }
+
+    .violation-sublabel {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #6b7280;
+    }
+
+    .violation-vdivider {
+    width: 1px;
+    align-self: stretch;
+    background: #e5e7eb;
+    margin: 0.5rem 0;
+    transition: background 0.25s ease;
+    }
+
+    .violation-right {
+    flex: 1.1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    }
+
+    .violation-donut-wrap {
+    position: relative;
+    width: 90px;
+    height: 90px;
+    }
+
+    .violation-donut-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #111827;
+    transition: color 0.25s ease;
+    }
+
+    .violation-legend {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    }
+
+    .violation-legend-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.2;
+    }
+
+    .violation-legend-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    }
+
+    .violation-legend-label.violated {
+    color: #ef4444;
+    }
+
+    .violation-legend-label.total {
+    color: #3b82f6;
+    }
+
+    .violation-legend-value {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #111827;
+    transition: color 0.25s ease;
+    }
+
+    .violation-legend-sep {
+    width: 1px;
+    height: 26px;
+    background: #e5e7eb;
+    transition: background 0.25s ease;
+    }
+
+    /* ---------- Device Status card ---------- */
+    .dvs-page {
+        font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+        width: 100%;
+        height: 100%;
+        padding: 0.9rem 1rem;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 0.85rem;
+    }
+
+    .dvs-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .dvs-header-left {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        min-width: 0;
+    }
+
+    .dvs-header-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #4f46e5, #6366f1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .dvs-header-text h1 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 700;
+        color: #111827;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: color 0.25s ease;
+    }
+
+    .dvs-header-text p {
+        margin: 0.05rem 0 0 0;
+        font-size: 0.875rem;
+        color: #9ca3af;
+    }
+
+    .dvs-live-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: #059669;
+        background: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        border-radius: 999px;
+        padding: 0.1rem 0.5rem;
+        flex-shrink: 0;
+    }
+
+    .dvs-live-dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: #10b981;
+        animation: dvs-pulse 1.8s ease-in-out infinite;
+    }
+
+    @@keyframes dvs-pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.45; transform: scale(1.4); }
+    }
+
+    .dvs-body {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        min-height: 0;
+    }
+
+    .dvs-donut-wrap {
+        position: relative;
+        width: 92px;
+        height: 92px;
+        flex-shrink: 0;
+    }
+
+    .dvs-donut-center {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        line-height: 1.1;
+    }
+
+    .dvs-donut-value {
+        font-size: 0.875rem;
+        font-weight: 700;
+        color: #111827;
+        transition: color 0.25s ease;
+    }
+
+    .dvs-donut-label {
+        font-size: 0.6875rem;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    .dvs-stats {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.55rem;
+        min-width: 0;
+    }
+
+    .dvs-stat-row {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        padding: 0.4rem 0.55rem;
+        border-radius: 9px;
+        background: #f9fafb;
+        border: 1px solid #eef0f3;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background 0.25s ease;
+    }
+
+    .dvs-stat-row:hover {
+        transform: translateX(2px);
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .dvs-stat-row.online:hover { border-color: #a7f3d0; }
+    .dvs-stat-row.offline:hover { border-color: #fecaca; }
+
+    .dvs-stat-row-top {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .dvs-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .dvs-dot.online { background: #10b981; }
+    .dvs-dot.offline { background: #ef4444; }
+
+    .dvs-stat-name {
+        flex: 1;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: #4b5563;
+        transition: color 0.25s ease;
+    }
+
+    .dvs-stat-count {
+        font-size: 0.675rem;
+        font-weight: 700;
+        color: #111827;
+        transition: color 0.25s ease;
+    }
+
+    .dvs-bar-track {
+        height: 4px;
+        border-radius: 999px;
+        background: #e5e7eb;
+        overflow: hidden;
+        transition: background 0.25s ease;
+    }
+
+    .dvs-bar-fill {
+        height: 100%;
+        border-radius: 999px;
+        transition: width 0.6s ease;
+    }
+
+    .dvs-bar-fill.online { background: #10b981; }
+    .dvs-bar-fill.offline { background: #ef4444; }
+
+    .dvs-uptime {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.6875rem;
+        color: #059669;
+        font-weight: 600;
+        margin-top: 0.1rem;
+    }
+
+    .dvs-uptime-icon {
+        font-size: 0.9rem !important;
+        color: #10b981 !important;
+    }
+
+    /* ---------- Vehicle Class Distribution card ---------- */
+    .vcd-page {
+        container-type: inline-size; /* NEW: card now reports its own width */
+        container-name: vcd;
+        font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+        width: 100%;
+        height: 100%;
+        padding: 0.9rem 1.1rem;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+     }
+
+    .vcd-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .vcd-header-left {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        min-width: 0;
+    }
+
+    .vcd-header-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #f59e0b, #f97316);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    
+    .vcd-header-text {
+        min-width: 0; /* NEW: required for ellipsis to actually work in flex */
+    }
+
+    .vcd-header-text h1 {
+        margin: 0;
+        font-size: clamp(0.8rem, 2.2cqi, 1rem);
+       /* font-size: 1rem;*/
+        font-weight: 700;
+        color: #111827;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: color 0.25s ease;
+    }
+
+    .vcd-header-text p {
+        margin: 0.05rem 0 0 0;
+        font-size: 0.875rem;
+        color: #9ca3af;
+    }
+
+    .vcd-sort-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: #4f46e5;
+        background: #eef2ff;
+        border: 1px solid #e0e3ff;
+        border-radius: 999px;
+        padding: 0.2rem 0.55rem;
+        cursor: pointer;
+        flex-shrink: 0;
+        transition: background 0.15s ease, transform 0.15s ease, border-color 0.25s ease, color 0.25s ease;
+    }
+
+    .vcd-sort-btn:hover {
+        background: #e0e7ff;
+        transform: translateY(-1px);
+    }
+
+    .vcd-sort-btn .mud-icon-root {
+        font-size: 0.85rem !important;
+    }
+
+    .vcd-body {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 1.1rem;
+        min-height: 0;
+    }
+
+    .vcd-donut-wrap {
+        position: relative;
+        width: 110px;
+        height: 110px;
+        flex-shrink: 0;
+    }
+
+    .vcd-donut-center {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        line-height: 1.1;
+    }
+
+    .vcd-donut-value {
+        font-size: 0.875rem;
+        font-weight: 700;
+        color: #111827;
+        transition: color 0.25s ease;
+    }
+
+    .vcd-donut-label {
+        font-size: 0.6875rem;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    .vcd-list {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        min-width: 0;
+        max-height: 100%;
+        overflow-y: auto;
+        padding-right: 0.2rem;
+    }
+
+    .vcd-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.3rem 0.4rem;
+        border-radius: 8px;
+        transition: background 0.15s ease, transform 0.15s ease;
+    }
+
+    .vcd-row:hover {
+        background: #f9fafb;
+        transform: translateX(2px);
+    }
+
+    .vcd-row-icon {
+        width: 24px;
+        height: 24px;
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .vcd-row-icon .mud-icon-root {
+        font-size: 0.9rem !important;
+    }
+
+    .vcd-row-main {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+    }
+
+    .vcd-row-top {
+        display: flex;
+        align-items: baseline;
+        gap: 0.4rem;
+    }
+
+    .vcd-row-name {
+        flex: 1;
+        font-size: 0.6875rem;
+        min-width: 24px;
+        font-weight: 600;
+        color: #374151;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: color 0.25s ease;
+    }
+
+    .vcd-row-count {
+        font-size: 0.6875rem;
+        font-weight: 700;
+        color: #111827;
+        transition: color 0.25s ease;
+    }
+
+    .vcd-row-pct {
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: #9ca3af;
+        min-width: 32px;
+        text-align: right;
+    }
+
+    .vcd-bar-track {
+        height: 4px;
+        border-radius: 999px;
+        background: #f3f4f6;
+        overflow: hidden;
+        transition: background 0.25s ease;
+    }
+
+    .vcd-bar-fill {
+        height: 100%;
+        border-radius: 999px;
+        transition: width 0.6s ease;
+    }
+
+    /* ---------- Vehicle Class Distribution card ---------- */
+    .vcd-page {
+        container-type: inline-size; /* NEW: card now reports its own width */
+        container-name: vcd;
+        font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+        width: 100%;
+        height: 100%;
+        padding: 0.9rem 1.1rem;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        min-width: 0; /* allow flex/grid parent to actually shrink this card */
+    }
+
+    .vcd-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        flex-wrap: wrap; /* NEW: sort button drops below title if needed */
+        min-width: 0;
+    }
+
+    .vcd-header-left {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    .vcd-header-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #f59e0b, #f97316);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .vcd-header-text {
+        min-width: 0; /* NEW: required for ellipsis to actually work in flex */
+    }
+
+        .vcd-header-text h1 {
+            margin: 0;
+            font-size: clamp(0.8rem, 2.2cqi, 1rem); /* NEW: fluid instead of fixed */
+            font-weight: 700;
+            color: #111827;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: color 0.25s ease;
+        }
+
+        .vcd-header-text p {
+            margin: 0.05rem 0 0 0;
+            font-size: 0.8rem;
+            color: #9ca3af;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+    .vcd-sort-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: #4f46e5;
+        background: #eef2ff;
+        border: 1px solid #e0e3ff;
+        border-radius: 999px;
+        padding: 0.2rem 0.55rem;
+        cursor: pointer;
+        flex-shrink: 0;
+        transition: background 0.15s ease, transform 0.15s ease, border-color 0.25s ease, color 0.25s ease;
+    }
+
+        .vcd-sort-btn:hover {
+            background: #e0e7ff;
+            transform: translateY(-1px);
+        }
+
+        .vcd-sort-btn .mud-icon-root {
+            font-size: 0.85rem !important;
+        }
+
+    .vcd-body {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 1.1rem;
+        min-height: 0;
+        min-width: 0;
+    }
+
+    .vcd-donut-wrap {
+        position: relative;
+        width: 110px;
+        height: 110px;
+        flex-shrink: 0;
+    }
+
+    .vcd-donut-center {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        line-height: 1.1;
+    }
+
+    .vcd-donut-value {
+        font-size: 0.875rem;
+        font-weight: 700;
+        color: #111827;
+        transition: color 0.25s ease;
+    }
+
+    .vcd-donut-label {
+        font-size: 0.6875rem;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    .vcd-list {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        min-width: 0;
+        max-height: 100%;
+        overflow-y: auto;
+        padding-right: 0.2rem;
+    }
+
+    .vcd-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.3rem 0.4rem;
+        border-radius: 8px;
+        min-width: 0;
+        transition: background 0.15s ease, transform 0.15s ease;
+    }
+
+        .vcd-row:hover {
+            background: #f9fafb;
+            transform: translateX(2px);
+        }
+
+    .vcd-row-icon {
+        width: 24px;
+        height: 24px;
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+        .vcd-row-icon .mud-icon-root {
+            font-size: 0.9rem !important;
+        }
+
+    .vcd-row-main {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+    }
+
+    .vcd-row-top {
+        display: flex;
+        align-items: baseline;
+        gap: 0.4rem;
+        min-width: 0;
+    }
+
+    .vcd-row-name {
+        flex: 1 1 auto;
+        min-width: 24px; /* NEW: floor so it never collapses to 1 char */
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: #374151;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: color 0.25s ease;
+    }
+
+    .vcd-row-count {
+        font-size: 0.6875rem;
+        font-weight: 700;
+        color: #111827;
+        flex-shrink: 0;
+        transition: color 0.25s ease;
+    }
+
+    .vcd-row-pct {
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: #9ca3af;
+        min-width: 32px;
+        text-align: right;
+        flex-shrink: 0;
+    }
+
+    .vcd-bar-track {
+        height: 4px;
+        border-radius: 999px;
+        background: #f3f4f6;
+        overflow: hidden;
+        transition: background 0.25s ease;
+    }
+
+    .vcd-bar-fill {
+        height: 100%;
+        border-radius: 999px;
+        transition: width 0.6s ease;
+    }
+
+    @@container vcd (max-width: 360px) {
+        .vcd-header {
+            flex-wrap: wrap;
+            justify-content: flex-end; /* NEW: wrapped button hugs the right edge */
+        }
+
+        
+        .vcd-header-left {
+            flex: 1 1 100%; /* NEW: title takes its own full-width row */
+        }
+
+        
+        .vcd-sort-btn {
+            margin-left: auto; /* NEW: pushes button to the right on its row */
+        }  
+        .vcd-body {
+            gap: 0.7rem; /* tighter gap instead of stacking */
+        }
+
+        .vcd-donut-wrap {
+            width: 84px; /* smaller donut so the list still has room */
+            height: 84px;
+        }
+
+        .vcd-donut-value {
+            font-size: 0.75rem;
+        }
+
+        .vcd-donut-label {
+            font-size: 0.6rem;
+        }
+
+        .vcd-row-name,
+        .vcd-row-count,
+        .vcd-row-pct {
+            font-size: 0.625rem; /* slightly smaller row text */
+        }
+
+        .vcd-row-pct {
+            min-width: 28px;
+        }
+
+        .vcd-header-text h1 {
+            font-size: 0.9rem;
+        }
+    }
+
+    @@container vcd (max-width: 300px) {
+        .vcd-donut-wrap {
+            width: 70px; /* shrink further before ever stacking */
+            height: 70px;
+        }
+
+        .vcd-donut-value {
+            font-size: 0.68rem;
+        }
+
+        .vcd-body {
+            gap: 0.5rem;
+        }
+
+        .vcd-row-pct {
+            min-width: 24px;
+        }
+    }
+
+    /* ---------- Last Transaction card ---------- */
+    .ltx-page {
+        font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+        width: 100%;
+        height: 100%;
+        padding: 0.9rem 1.1rem;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 0.65rem;
+        color: #1f2937;
+    }
+
+    .ltx-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .ltx-header-left {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        min-width: 0;
+    }
+
+    .ltx-header-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #0f172a, #334155);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .ltx-header-text h1 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 700;
+        color: #111827;
+        transition: color 0.25s ease;
+    }
+
+    .ltx-header-text p {
+        margin: 0.05rem 0 0 0;
+        font-size: 0.875rem;
+        color: #9ca3af;
+    }
+
+    .ltx-live-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: #059669;
+        background: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        border-radius: 999px;
+        padding: 0.15rem 0.55rem;
+        flex-shrink: 0;
+    }
+
+    .ltx-live-dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: #10b981;
+        animation: ltx-pulse 1.8s ease-in-out infinite;
+    }
+
+    @@keyframes ltx-pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.45; transform: scale(1.4); }
+    }
+
+    .ltx-media-row {
+        display: flex;
+        gap: 0.6rem;
+        flex: 1.3;
+        min-height: 0;
+    }
+
+    .ltx-media-tile {
+        position: relative;
+        flex: 1;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #0f172a;
+        cursor: pointer;
+        min-height: 0;
+    }
+
+    .ltx-media-tile.video-tile {
+        cursor: default;
+    }
+
+    .ltx-media-img,
+    .ltx-media-video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .ltx-media-tile:hover .ltx-media-expand {
+        opacity: 1;
+    }
+
+    .ltx-media-tag {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        color: #ffffff;
+        background: rgba(0, 0, 0, 0.55);
+        border-radius: 999px;
+        padding: 0.15rem 0.5rem;
+        backdrop-filter: blur(2px);
+        pointer-events: none;
+    }
+
+    .ltx-media-tag .mud-icon-root {
+        font-size: 0.7rem !important;
+        color: #ffffff !important;
+    }
+
+    .ltx-media-tag.video {
+        background: rgba(79, 70, 229, 0.75);
+    }
+
+    .ltx-media-expand {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.55);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+    }
+
+    .ltx-media-expand .mud-icon-root {
+        font-size: 0.8rem !important;
+        color: #ffffff !important;
+    }
+
+    .ltx-info-row {
+        flex: 1;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem 0.75rem;
+        align-content: center;
+    }
+
+    .ltx-info-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        min-width: 0;
+    }
+
+    .ltx-info-label {
+        font-size: 0.6875rem;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        font-weight: 600;
+    }
+
+    .ltx-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        border-radius: 999px;
+        padding: 0.2rem 0.6rem;
+        width: fit-content;
+    }
+
+    .ltx-badge .mud-icon-root {
+        font-size: 0.8rem !important;
+    }
+
+    .ltx-badge.wrong-direction { background: #fef2f2; color: #dc2626; }
+    .ltx-badge.wrong-direction .mud-icon-root { color: #dc2626 !important; }
+
+    .ltx-badge.speed-violation { background: #fff7ed; color: #ea580c; }
+    .ltx-badge.speed-violation .mud-icon-root { color: #ea580c !important; }
+
+    .ltx-badge.normal { background: #f0fdf4; color: #16a34a; }
+    .ltx-badge.normal .mud-icon-root { color: #16a34a !important; }
+
+    .ltx-badge.vclass { background: #ecfdf5; color: #059669; }
+    .ltx-badge.vclass .mud-icon-root { color: #059669 !important; }
+
+    .ltx-badge.location { background: #f9fafb; color: #374151; border: 1px solid #e5e7eb; transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease; }
+
+    .ltx-location-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .ltx-timestamp {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: #4b5563;
+        transition: color 0.25s ease;
+    }
+
+    .ltx-timestamp .mud-icon-root {
+        font-size: 0.8rem !important;
+        color: #9ca3af !important;
+    }
+
+    .voc-card {
+     container-type: inline-size; /* NEW */
+    container-name: voc;
+    font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+    width: 100%;
+    height: 100%;
+    padding: 0.9rem 1.1rem;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    color: #1f2937;
+        min-width: 0;
+}
+    .voc-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        flex-shrink: 0;
+        flex-wrap: nowrap; /* CHANGED: was wrap — keep single row like image 1 */
+        min-width: 0;
+    }
+
+.voc-header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-width: 0;
+        flex: 1 1 auto;
+}
+
+.voc-header-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+}
+
+    .voc-header-text {
+        min-width: 0; /* NEW */
+    }
+
+.voc-header-text h1 {
+    margin: 0;
+            font-size: clamp(0.8rem, 2.2cqi, 1rem);
+    font-weight: 700;
+    color: #111827;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color 0.25s ease;
+}
+
+.voc-header-text p {
+    margin: 0.05rem 0 0 0;
+    font-size: 0.7rem;
+    color: #9ca3af;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+}
+
+.voc-live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: #059669;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+    flex-shrink: 0;
+}
+
+.voc-live-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #10b981;
+    animation: voc-pulse 1.8s ease-in-out infinite;
+}
+
+@@keyframes voc-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.45; transform: scale(1.4); }
+}
+
+    .voc-summary {
+        display: flex;
+        align-items: center;
+        background: #f9fafb;
+        border: 1px solid #eef0f3;
+        border-radius: 10px;
+        padding: 0.45rem 0.6rem;
+        flex-shrink: 0;
+        flex-wrap: nowrap; /* CHANGED: was wrap — keep 3 columns side by side */
+        transition: background 0.25s ease, border-color 0.25s ease;
+    }
+
+.voc-summary-item {
+     flex: 1 1 84px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.05rem;
+    min-width: 0;
+}
+
+    .voc-summary-value {
+        font-size: clamp(0.6rem, 2.1cqi, 0.7rem); /* CHANGED: fluid instead of fixed */
+        font-weight: 700;
+        color: #111827;
+        white-space: normal; /* CHANGED: was nowrap */
+        overflow: visible; /* CHANGED: was hidden */
+        text-overflow: clip; /* CHANGED: was ellipsis */
+        line-height: 1.15;
+        max-width: 100%;
+        word-break: break-word; /* NEW: wraps long labels like "WRONG DIRECTION" cleanly */
+        transition: color 0.25s ease;
+    }
+
+.voc-summary-label {
+    font-size: 0.62rem;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.voc-summary-divider {
+    width: 1px;
+    height: 24px;
+    background: #e5e7eb;
+    flex-shrink: 0;
+    transition: background 0.25s ease;
+}
+
+.voc-search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.voc-search-icon {
+    position: absolute;
+    left: 0.55rem;
+    font-size: 0.85rem !important;
+    color: #9ca3af !important;
+    pointer-events: none;
+}
+
+.voc-search-input {
+    width: 100%;
+    font-size: 0.6875rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 0.35rem 1.8rem 0.35rem 1.8rem;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.25s ease, color 0.25s ease;
+    background: #ffffff;
+    color: #1f2937;
+}
+
+.voc-search-input:focus {
+    border-color: #a5b4fc;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.voc-search-clear {
+    position: absolute;
+    right: 0.4rem;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    color: #9ca3af;
+    padding: 0.1rem;
+}
+
+.voc-search-clear:hover { color: #4b5563; }
+
+.voc-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding-right: 0.15rem;
+}
+
+.voc-row {
+    background: #f9fafb;
+    border: 1px solid #eef0f3;
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.voc-row:hover {
+    border-color: #e0e3ff;
+    background: #ffffff;
+}
+
+.voc-row.expanded {
+    background: #ffffff;
+    border-color: #c7d2fe;
+    box-shadow: 0 3px 10px rgba(79, 70, 229, 0.08);
+}
+
+    .voc-row-header {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        padding: 0.45rem 0.6rem;
+        cursor: pointer;
+        flex-wrap: nowrap; /* CHANGED: was wrap — badge/bar/numbers stay one row */
+        min-width: 0;
+    }
+
+.voc-event-badge {
+    font-size: 0.625rem;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.voc-event-badge.wrong-direction { background: #fef2f2; color: #dc2626; }
+.voc-event-badge.stopped { background: #fff7ed; color: #ea580c; }
+.voc-event-badge.default { background: #eef2ff; color: #4f46e5; }
+
+.voc-row-bar-track {
+        flex: 1 1 60px;
+    height: 6px;
+    border-radius: 999px;
+    background: #eef0f3;
+    overflow: hidden;
+    min-width: 40px;
+    transition: background 0.25s ease;
+}
+
+.voc-row-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.5s ease;
+}
+
+.voc-row-total {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: #111827;
+    min-width: 42px;
+    text-align: right;
+        flex-shrink: 0;
+    transition: color 0.25s ease;
+}
+
+    .voc-row-pct {
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: #9ca3af;
+        min-width: 34px;
+        text-align: right;
+        flex-shrink: 0;
+    }
+
+    .voc-chevron {
+        font-size: 0.9rem !important;
+        color: #9ca3af !important;
+        transition: transform 0.2s ease;
+        flex-shrink: 0;
+    }
+
+    .voc-row.expanded .voc-chevron {
+        transform: rotate(90deg);
+        color: #4f46e5 !important;
+    }
+
+    .voc-row-detail {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        padding: 0.1rem 0.6rem 0.6rem 0.6rem;
+        animation: voc-expand 0.18s ease;
+    }
+
+
+@@keyframes voc-expand {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.voc-detail-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-left: 0.2rem;
+        min-width: 0;
+        flex-wrap: wrap;
+}
+
+    .voc-detail-label {
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: #6b7280;
+        width: 52px;
+        flex-shrink: 0;
+    }
+
+    .voc-detail-bar-track {
+        flex: 1 1 60px;
+        height: 5px;
+        border-radius: 999px;
+        background: #f3f4f6;
+        overflow: hidden;
+        transition: background 0.25s ease;
+    }
+
+    .voc-detail-bar-fill {
+        height: 100%;
+        border-radius: 999px;
+        transition: width 0.5s ease;
+    }
+
+    .voc-detail-value {
+        font-size: 0.6875rem;
+        font-weight: 700;
+        color: #111827;
+        min-width: 40px;
+        text-align: right;
+        flex-shrink: 0;
+        transition: color 0.25s ease;
+    }
+
+    .voc-detail-empty {
+        font-size: 0.6875rem;
+        color: #9ca3af;
+        padding: 0.2rem;
+    }
+
+    .voc-empty {
+        margin: auto;
+        text-align: center;
+        color: #b0b5bd;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 1rem;
+    }
+
+    .voc-empty-icon {
+        font-size: 1.4rem !important;
+        color: #d1d5db !important;
+    }
+
+    .voc-empty p {
+        margin: 0;
+        font-size: 0.6875rem;
+    }
+
+    .voc-footer {
+        font-size: 0.6875rem;
+        color: #9ca3af;
+        flex-shrink: 0;
+    }
+
+    /* ===== Container-query breakpoints: shrink, never hide/truncate ===== */
+
+    @@container voc (max-width: 340px) {
+        .voc-card {
+            padding: 0.7rem 0.8rem;
+            gap: 0.45rem;
+        }
+
+        .voc-summary {
+            padding: 0.4rem 0.4rem;
+            gap: 0.3rem;
+        }
+
+        .voc-summary-label {
+            font-size: 0.56rem;
+        }
+
+        .voc-header-text h1 {
+            font-size: clamp(0.78rem, 2.4cqi, 0.95rem);
+        }
+
+        .voc-row-header {
+            padding: 0.4rem 0.45rem;
+            gap: 0.4rem;
+        }
+
+        .voc-event-badge {
+            font-size: 0.58rem;
+            padding: 0.18rem 0.4rem;
+        }
+
+        .voc-row-total {
+            font-size: 0.6875rem;
+            font-weight: 700;
+            color: #111827;
+            min-width: 42px;
+            text-align: right;
+            flex-shrink: 0; /* already present — keep it, this is what stops "10" clipping */
+            white-space: nowrap; /* NEW: numbers should never wrap mid-value */
+            transition: color 0.25s ease;
+        }
+        .voc-row-pct {
+            font-size: 0.6875rem;
+            font-weight: 600;
+            color: #9ca3af;
+            min-width: 34px;
+            text-align: right;
+            flex-shrink: 0;
+            white-space: nowrap; /* NEW */
+        }
+    }
+
+    @@container voc (max-width: 260px) {
+        .voc-summary {
+            padding: 0.35rem;
+        }
+
+        .voc-summary-value {
+            font-size: 0.58rem;
+        }
+
+        .voc-summary-label {
+            font-size: 0.52rem;
+        }
+
+        .voc-row-header {
+            gap: 0.3rem;
+        }
+
+        .voc-event-badge {
+            font-size: 0.55rem;
+            padding: 0.15rem 0.35rem;
+        }
+
+        .voc-row-bar-track {
+            flex: 1 1 30px;
+            min-width: 24px;
+        }
+
+        .voc-row-total {
+            min-width: 26px;
+            font-size: 0.6rem;
+        }
+
+        .voc-row-pct {
+            min-width: 26px;
+            font-size: 0.6rem;
+        }
+    }
+    /* -------- Recent Vehicles Violation card -------- */
+    .rvv-card {
+        font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+        overflow: hidden;
+    }
+
+    .rvv-container {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        gap: 0.6rem;
+    }
+
+    .rvv-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-shrink: 0;
+    }
+
+    .rvv-header-left {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        min-width: 0;
+    }
+
+    .rvv-header-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .rvv-title {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 700;
+        color: #111827;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: color 0.25s ease;
+    }
+
+    .rvv-subtitle {
+        margin: 0.05rem 0 0 0;
+        font-size: 0.875rem;
+        color: #9ca3af;
+    }
+
+    .rvv-header-right {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-shrink: 0;
+    }
+
+    .rvv-badge {
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: lightseagreen;
+        background: #eef2ff;
+        padding: 0.2rem 0.6rem;
+        border-radius: 999px;
+        border: 1px solid #e0e3ff;
+        transition: background 0.25s ease, border-color 0.25s ease;
+    }
+
+    .rvv-live-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: #059669;
+        background: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        border-radius: 999px;
+        padding: 0.15rem 0.55rem;
+    }
+
+    .rvv-live-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #10b981;
+        animation: rvv-pulse 1.8s ease-in-out infinite;
+    }
+
+    @@keyframes rvv-pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.4; transform: scale(1.5); }
+    }
+
+    .rvv-table-wrap {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
+        border-radius: 8px;
+        border: 1px solid #f0f1f3;
+        transition: border-color 0.25s ease;
+    }
+
+    /* Removed vendor-specific scrollbar styling to fix CSS errors */
+    .rvv-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.6875rem;
+        min-width: 600px;
+    }
+
+    .rvv-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        text-align: left;
+        padding: 0.45rem 0.6rem;
+        font-weight: 600;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-size: 0.6875rem;
+        background: #f9fafb;
+        border-bottom: 2px solid #e5e7eb;
+        transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+    }
+
+    .rvv-table thead th:first-child { padding-left: 0.8rem; }
+    .rvv-table thead th:last-child { padding-right: 0.8rem; }
+
+    .rvv-row {
+        cursor: pointer;
+        transition: background 0.15s ease, transform 0.15s ease, border-color 0.25s ease;
+        border-bottom: 1px solid #f3f4f6;
+    }
+
+    .rvv-row:hover {
+        background: #f8faff;
+        transform: translateX(2px);
+    }
+
+    .rvv-row td {
+        padding: 0.45rem 0.6rem;
+        vertical-align: middle;
+        color: #374151;
+        transition: color 0.25s ease;
+    }
+
+    .rvv-row td:first-child { padding-left: 0.8rem; }
+    .rvv-row td:last-child { padding-right: 0.8rem; }
+
+    .rvv-event-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-weight: 600;
+        padding: 0.2rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.62rem;
+        white-space: nowrap;
+    }
+
+    .rvv-event-badge .mud-icon-root {
+        font-size: 0.62rem !important;
+    }
+
+    .rvv-event-badge.wrong-direction {
+        background: #fef2f2;
+        color: #dc2626;
+    }
+
+    .rvv-event-badge.wrong-direction .mud-icon-root {
+        color: #dc2626 !important;
+    }
+
+    .rvv-event-badge.vehicle-stopped {
+        background: #fff7ed;
+        color: #ea580c;
+    }
+
+    .rvv-event-badge.vehicle-stopped .mud-icon-root {
+        color: #ea580c !important;
+    }
+
+    .rvv-event-badge.speed-violation {
+        background: #fefce8;
+        color: #ca8a04;
+    }
+
+    .rvv-event-badge.speed-violation .mud-icon-root {
+        color: #ca8a04 !important;
+    }
+
+    .rvv-event-badge.default {
+        background: #e2f2ff;
+        color: #4f26e5;
+    }
+
+    .rvv-event-badge.default .mud-icon-root {
+        color: #eef2ff !important;
+    }
+
+    .rvv-vehicle-class {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-weight: 600;
+        color: #1f2937;
+        font-size: 0.6875rem;
+        transition: color 0.25s ease;
+    }
+
+    .rvv-vehicle-class .mud-icon-root {
+        font-size: 0.85rem !important;
+        color: #6b7280 !important;
+    }
+
+    .rvv-timestamp {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        color: #6b7280;
+        font-size: 0.6875rem;
+        white-space: nowrap;
+    }
+
+    .rvv-timestamp .mud-icon-root {
+        font-size: 0.7rem !important;
+        color: #9ca3af !important;
+    }
+
+    .rvv-location {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-weight: 500;
+        color: #374151;
+        font-size: 0.6875rem;
+        transition: color 0.25s ease;
+    }
+
+    .rvv-location-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .rvv-media-icons {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .rvv-media-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        border: none;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .rvv-media-btn .mud-icon-root {
+        font-size: 0.8rem !important;
+    }
+
+    .rvv-media-btn.image {
+        background: #eef2ff;
+        color: #4f46e5;
+    }
+
+    .rvv-media-btn.image:hover {
+        background: #c7d2fe;
+        transform: scale(1.08);
+    }
+
+    .rvv-media-btn.video {
+        background: #fef3c7;
+        color: #d97706;
+    }
+
+    .rvv-media-btn.video:hover {
+        background: #fde68a;
+        transform: scale(1.08);
+    }
+
+    .rvv-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-shrink: 0;
+        padding-top: 0.2rem;
+        border-top: 1px solid #f0f1f3;
+        transition: border-color 0.25s ease;
+    }
+
+    .rvv-footer span {
+        font-size: 0.6875rem;
+        color: #9ca3af;
+    }
+
+    .rvv-view-all {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.2rem;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: #4f46e5;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        padding: 0.2rem 0.4rem;
+        border-radius: 6px;
+        transition: background 0.15s ease;
+    }
+
+    .rvv-view-all:hover {
+        background: #eef2ff;
+    }
+
+    .rvv-view-all .mud-icon-root {
+        font-size: 0.85rem !important;
+        color: #4f46e5 !important;
+    }
+
+    .rvv-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #9ca3af;
+        font-size: 0.875rem;
+        gap: 0.5rem;
+    }
+
+    .rvv-empty .mud-icon-root {
+        font-size: 1.5rem !important;
+        color: #d1d5db !important;
+    }
+
+    /* Responsive */
+    @@media (max-width: 640px) {
+        .rvv-title { font-size: 0.875rem; }
+        .rvv-subtitle { font-size: 0.75rem; }
+        .rvv-badge { font-size: 0.625rem; padding: 0.1rem 0.4rem; }
+        .rvv-header-right { gap: 0.3rem; }
+    }
+
+  /* Light mode defaults */
+body:not(.dark-mode) {
+    background-color: #f8fafc !important;
+}
+
+body:not(.dark-mode) .top-row.px-4 {
+    background-color: #ffffff !important;
+    border-bottom: 1px solid #e5e7eb !important;
+}
+
+body:not(.dark-mode) .content.px-4 {
+    background-color: #f8fafc !important;
+}
+
+body:not(.dark-mode) main {
+    background-color: #f8fafc !important;
+}
+
+body:not(.dark-mode) .page {
+    background-color: #f8fafc !important;
+}
+
+body:not(.dark-mode) .mud-layout {
+    background-color: #f8fafc !important;
+}
+
+ /* Apply dark mode to body when dashboard is in dark mode */
+body.dark-mode {
+    background-color: #0f172a !important;
+}
+
+body.dark-mode .top-row.px-4 {
+    background-color: #0f172a !important;
+    border-bottom: 1px solid #334155 !important;
+}
+
+body.dark-mode .content.px-4 {
+    background-color: #0f172a !important;
+}
+
+body.dark-mode main {
+    background-color: #0f172a !important;
+}
+
+body.dark-mode .page {
+    background-color: #0f172a !important;
+}
+
+body.dark-mode .mud-layout {
+    background-color: #0f172a !important;
+}
+
+        /* ==========================================================
+       SIDEBAR DARK MODE OVERRIDES
+       ========================================================== */
+        body.dark-mode .vids-sidebar {
+            background: #1e293b !important;
+            border-color: #334155 !important;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.35) !important;
+        }
+
+        body.dark-mode .sidebar-float-toggle {
+            background: #1e293b !important;
+            border-color: #334155 !important;
+            color: #a5b4fc !important;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.35) !important;
+        }
+
+            body.dark-mode .sidebar-float-toggle:hover {
+                background: #16233b !important;
+            }
+
+        body.dark-mode .vids-sidebar-top {
+            border-color: #334155 !important;
+        }
+
+        body.dark-mode .sidebar-brand {
+            color: #f1f5f9 !important;
+        }
+
+        body.dark-mode .sidebar-toggle-btn {
+            background: rgba(79,70,229,0.2) !important;
+            color: #a5b4fc !important;
+        }
+
+            body.dark-mode .sidebar-toggle-btn:hover {
+                background: rgba(79,70,229,0.32) !important;
+            }
+
+        body.dark-mode .sidebar-item + .sidebar-item {
+            border-color: #334155 !important;
+        }
+
+        body.dark-mode .sidebar-item-row:hover {
+            background: #16233b !important;
+        }
+
+      /*   body.dark-mode .sidebar-item-row.active {
+            background: rgba(99,102,241,0.16) !important;
+        } */
+
+            body.dark-mode .sidebar-item-row.active .sidebar-item-label {
+                color: #a5b4fc !important;
+            }
+
+        body.dark-mode .sidebar-item-label {
+            color: #cbd5e1 !important;
+        }
+
+        body.dark-mode .sidebar-chevron {
+            color: #64748b !important;
+        }
+
+        body.dark-mode .sidebar-submenu-item {
+            color: #94a3b8 !important;
+        }
+
+            body.dark-mode .sidebar-submenu-item:hover,
+            body.dark-mode .sidebar-submenu-item.active {
+                background: rgba(99,102,241,0.16) !important;
+                color: #a5b4fc !important;
+            }
+
+    /* ==========================================================
+       DARK MODE OVERRIDES
+       ========================================================== */
+    .vids-dashboard.dark-mode {
+        color-scheme: dark;
+    }
+
+    .vids-dashboard.dark-mode .dashboard-topbar {
+        background: #1e293b;
+        border-color: #334155;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.35);
+    }
+
+    .vids-dashboard.dark-mode .dashboard-topbar-text h1 { color: #f1f5f9; }
+    .vids-dashboard.dark-mode .dashboard-topbar-text p { color: #94a3b8; }
+    .vids-dashboard.dark-mode .theme-toggle-track { background: #334155; }
+    .vids-dashboard.dark-mode .theme-toggle-icon.sun { color: #64748b; }
+    .vids-dashboard.dark-mode .theme-toggle-icon.moon { color: #fbbf24; }
+
+    /* Cards */
+    .vids-dashboard.dark-mode .mud-paper {
+        background-color: #1e293b !important;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.35) !important;
+    }
+
+    .vids-dashboard.dark-mode .avt-card,
+    .vids-dashboard.dark-mode .avc-card {
+        background: #1e293b;
+    }
+
+    .vids-dashboard.dark-mode .traffic-icon,
+    .vids-dashboard.dark-mode .traffic-title,
+    .vids-dashboard.dark-mode .traffic-title-value,
+    .vids-dashboard.dark-mode .dvs-header-text h1,
+    .vids-dashboard.dark-mode .violation-title,
+    .vids-dashboard.dark-mode .avt-header-text h1,
+    .vids-dashboard.dark-mode .vcd-header-text h1,
+    .vids-dashboard.dark-mode .ltx-header-text h1,
+    .vids-dashboard.dark-mode .voc-header-text h1,
+    .vids-dashboard.dark-mode .rvv-title,
+    .vids-dashboard.dark-mode .dvs-donut-value,
+    .vids-dashboard.dark-mode .vcd-donut-value,
+    .vids-dashboard.dark-mode .violation-value,
+    .vids-dashboard.dark-mode .violation-donut-center,
+    .vids-dashboard.dark-mode .violation-legend-value,
+    .vids-dashboard.dark-mode .avt-stat-value,
+    .vids-dashboard.dark-mode .vcd-row-count,
+    .vids-dashboard.dark-mode .vcd-row-name,
+    .vids-dashboard.dark-mode .voc-summary-value,
+    .vids-dashboard.dark-mode .voc-row-total,
+    .vids-dashboard.dark-mode .voc-detail-value,
+    .vids-dashboard.dark-mode .rvv-row td,
+    .vids-dashboard.dark-mode .rvv-vehicle-class,
+    .vids-dashboard.dark-mode .rvv-location,
+    .vids-dashboard.dark-mode .dvs-stat-name,
+    .vids-dashboard.dark-mode .dvs-stat-count,
+    .vids-dashboard.dark-mode .traffic-row-label,
+    .vids-dashboard.dark-mode .ltx-timestamp {
+        color: #f1f5f9;
+    }
+
+    .vids-dashboard.dark-mode .dvs-header-text p,
+    .vids-dashboard.dark-mode .avt-header-text p,
+    .vids-dashboard.dark-mode .vcd-header-text p,
+    .vids-dashboard.dark-mode .ltx-header-text p,
+    .vids-dashboard.dark-mode .voc-header-text p,
+    .vids-dashboard.dark-mode .rvv-subtitle,
+    .vids-dashboard.dark-mode .dvs-donut-label,
+    .vids-dashboard.dark-mode .vcd-donut-label,
+    .vids-dashboard.dark-mode .violation-sublabel,
+    .vids-dashboard.dark-mode .ltx-info-label,
+    .vids-dashboard.dark-mode .voc-summary-label,
+    .vids-dashboard.dark-mode .voc-row-pct,
+    .vids-dashboard.dark-mode .voc-footer,
+    .vids-dashboard.dark-mode .voc-detail-label,
+    .vids-dashboard.dark-mode .rvv-timestamp,
+    .vids-dashboard.dark-mode .rvv-footer span,
+    .vids-dashboard.dark-mode .vcd-row-pct,
+    .vids-dashboard.dark-mode .avt-stat-label,
+    .vids-dashboard.dark-mode .voc-chevron {
+        color: #94a3b8 !important;
+    }
+
+    .vids-dashboard.dark-mode .traffic-row,
+    .vids-dashboard.dark-mode .dvs-stat-row,
+    .vids-dashboard.dark-mode .voc-summary,
+    .vids-dashboard.dark-mode .voc-row,
+    .vids-dashboard.dark-mode .rvv-table thead th {
+        background: #0f172a;
+        border-color: #334155;
+    }
+
+    .vids-dashboard.dark-mode .voc-row:hover { background: #16233b; border-color: #4f46e5; }
+    .vids-dashboard.dark-mode .voc-row.expanded { background: #16233b; border-color: #6366f1; }
+    .vids-dashboard.dark-mode .vcd-row:hover { background: #0f172a; }
+    .vids-dashboard.dark-mode .rvv-row:hover { background: #16233b; }
+    .vids-dashboard.dark-mode .rvv-row { border-color: #334155; }
+
+    .vids-dashboard.dark-mode .dvs-bar-track,
+    .vids-dashboard.dark-mode .vcd-bar-track,
+    .vids-dashboard.dark-mode .voc-row-bar-track,
+    .vids-dashboard.dark-mode .voc-detail-bar-track {
+        background: #334155;
+    }
+
+    .vids-dashboard.dark-mode .violation-vdivider,
+    .vids-dashboard.dark-mode .voc-summary-divider,
+    .vids-dashboard.dark-mode .violation-legend-sep,
+    .vids-dashboard.dark-mode .violation-header,
+    .vids-dashboard.dark-mode .rvv-table-wrap,
+    .vids-dashboard.dark-mode .rvv-footer {
+        border-color: #334155;
+    }
+
+    .vids-dashboard.dark-mode .avt-stat.peak-hour { background: rgba(99,102,241,0.16); }
+    .vids-dashboard.dark-mode .avt-stat.peak-count { background: rgba(16,185,129,0.16); }
+    .vids-dashboard.dark-mode .avt-stat.avg-hour { background: rgba(249,115,22,0.16); }
+
+    .vids-dashboard.dark-mode .voc-search-input {
+        background: #0f172a;
+        border-color: #334155;
+        color: #f1f5f9;
+    }
+
+    .vids-dashboard.dark-mode .ltx-badge.location {
+        background: #0f172a;
+        border-color: #334155;
+        color: #cbd5e1;
+    }
+
+    .vids-dashboard.dark-mode .rvv-badge {
+        background: rgba(99,102,241,0.18);
+        border-color: #4338ca;
+    }
+
+    .vids-dashboard.dark-mode .violation-icon-circle {
+        background: rgba(59,130,246,0.2);
+    }
+
+    .vids-dashboard.dark-mode .vcd-sort-btn {
+        background: rgba(79,70,229,0.2);
+        border-color: #4338ca;
+        color: #a5b4fc;
+    }
+
+    .vids-dashboard.dark-mode .traffic-location-chip.mud-chip {
+        border-color: #818cf8 !important;
+        color: #a5b4fc !important;
+    }
+
+    .vids-dashboard.dark-mode .avt-empty,
+    .vids-dashboard.dark-mode .avc-empty,
+    .vids-dashboard.dark-mode .voc-empty,
+    .vids-dashboard.dark-mode .rvv-empty {
+        color: #64748b;
+    }
+
+  
+</style>
+ 
+
+
+
+@code
+{
+  // ---- Recent Vehicles Violation data ----
+    private class ViolationEvent
+    {
+        public string EventType { get; set; } = string.Empty;
+        public string VehicleClass { get; set; } = string.Empty;
+        public DateTime Timestamp { get; set; }
+        public string Location { get; set; } = string.Empty;
+        public string ImageUrl { get; set; } = string.Empty;
+        public string VideoUrl { get; set; } = string.Empty;
+
+        public string EventTypeClass => EventType switch  
+        {
+            "Wrong direction" => "wrong-direction",
+            "Vehicle Stopped" => "vehicle-stopped",
+            "Speed violation" => "speed-violation",
+            _ => "default"
+        };
+    }
+
+    private List<ViolationEvent> violationEvents = new();
+    
+       
+    private string GetEventIcon(string eventType) => eventType switch
+    {
+        "Wrong direction" => Icons.Material.Filled.SyncProblem,
+        "Vehicle Stopped" => Icons.Material.Filled.Pause,
+        "Speed violation" => Icons.Material.Filled.Speed,
+        _ => Icons.Material.Filled.Warning
+    };
+
+    private string GetVehicleIcon(string vehicleClass) => vehicleClass.ToLower() switch
+    {
+        "bike" or "bicycle" => Icons.Material.Filled.PedalBike,
+        "car" => Icons.Material.Filled.DirectionsCar,
+        "auto" => Icons.Material.Filled.LocalTaxi,
+        "truck" => Icons.Material.Filled.LocalShipping,
+        "bus" => Icons.Material.Filled.DirectionsBus,
+        "pickup" => Icons.Material.Filled.AirportShuttle,
+        "tractor" => Icons.Material.Filled.Agriculture,
+        _ => Icons.Material.Filled.DirectionsCar
+    };
+
+    private string GetLocationColor(string location)
+    {
+        var hash = location.GetHashCode();
+        var colors = new[] { "#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ec4899" };
+        return colors[Math.Abs(hash) % colors.Length];
+    }
+
+    private void OnRowClick(ViolationEvent item)
+    {
+        // Handle row click - e.g., show details dialog
+        Console.WriteLine($"Row clicked: {item.EventType} at {item.Timestamp}");
+    }
+
+    private void OpenMedia(ViolationEvent item, string type)
+    {
+        // Handle media open - e.g., show lightbox or dialog
+        Console.WriteLine($"Opening {type} for event at {item.Timestamp}");
+    }
+
+    private void ViewAll()
+    {
+        // Navigate to full violations list or expand
+        Console.WriteLine("View all violations clicked");
+    }
+
+    // Simulate refresh - replace with actual data source
+    //private void RefreshData()
+    //{
+        // In production, fetch from VidsDataService
+        // violationEvents = await VidsDataService.GetRecentViolationsAsync();
+      //  StateHasChanged();
+    //}
+
+    // ---- Dark Mode ----
+    private bool isDarkMode = false;
+
+private string RootCssClass => isDarkMode ? "vids-dashboard dark-mode" : "vids-dashboard";
+
+private async Task ToggleDarkMode()
+{
+    isDarkMode = !isDarkMode;
+
+    try
+    {
+        // Save to localStorage
+        await JS.InvokeVoidAsync("localStorage.setItem", "vids-theme", isDarkMode ? "dark" : "light");
+        
+        // CRITICAL: Apply dark mode to entire page (body + MainLayout)
+        await JS.InvokeVoidAsync("applyDarkModeToPage", isDarkMode);
+    }
+    catch
+    {
+        // Ignore storage errors (e.g. private browsing restrictions)
+    }
+
+    await RerenderChartsForTheme();
+    StateHasChanged();
+}
+    // private bool isDarkMode = false;
+
+    // private string RootCssClass => isDarkMode ? "vids-dashboard dark-mode" : "vids-dashboard";
+
+    // private async Task ToggleDarkMode()
+    // {
+    //     isDarkMode = !isDarkMode;
+
+    //     try  
+    //     {
+    //         await JS.InvokeVoidAsync("localStorage.setItem", "vids-theme", isDarkMode ? "dark" : "light");
+    //     }
+    //     catch
+    //     {
+    //         // Ignore storage errors (e.g. private browsing restrictions)
+    //     }
+
+    //     await RerenderChartsForTheme();
+    // }
+
+    private async Task RerenderChartsForTheme()
+    {
+        if (averageVehicleCount is not null && averageVehicleCount.Any())
+        {
+            var labels = averageVehicleCount.Select(x => x.Time).ToArray();
+            var data = averageVehicleCount.Select(x => x.TrafficCount).ToArray();
+            await JS.InvokeVoidAsync("renderAvtChart", labels, data, isDarkMode);
+        }
+
+        await JS.InvokeVoidAsync("renderViolationDonut", ViolatedPercent, isDarkMode);
+        await JS.InvokeVoidAsync("renderDeviceStatusDonut", OnlineDevices, OfflineDevices, isDarkMode);
+
+        var vcLabels = vehicleClasses.Select(x => x.Name).ToArray();
+        var vcData = vehicleClasses.Select(x => x.Count).ToArray();
+        var vcColors = vehicleClasses.Select(x => x.Color).ToArray();
+        await JS.InvokeVoidAsync("renderVehicleClassDonut", vcLabels, vcData, vcColors, isDarkMode);
+    }
+
+    // ---- Device Status card data ----
+    // Replace with real data from VidsDataService.
+    private int OnlineDevices = 0;
+    private int OfflineDevices = 0;
+
+    private int TotalDevices => OnlineDevices + OfflineDevices;
+
+    private double OnlinePercent =>
+        TotalDevices == 0 ? 0 : Math.Round((double)OnlineDevices / TotalDevices * 100, 1);
+
+    private double OfflinePercent =>
+        TotalDevices == 0 ? 0 : Math.Round((double)OfflineDevices / TotalDevices * 100, 1);
+
+    // ---- Vehicle Class Distribution card data ----
+    // Replace with real data from VidsDataService.
+
+    
+    // Keep this class — it was NOT meant to be deleted
+    private class ViolationRow
+    {
+        public string EventType { get; set; } = string.Empty;
+        public string BadgeClass { get; set; } = "default";
+        public Dictionary<string, int> Values { get; set; } = new();
+        public int Total => Values.Values.Sum();
+        public int MaxValue => Values.Values.DefaultIfEmpty(0).Max();
+    }
+
+    private readonly List<string> VehicleClassColumns = new()
+    {
+        "Auto", "Bike", "Car", "LCV", "Truck", "Bus", "Pickup", "Tractor", "Others"
+    };
+     private List<ViolationRow> violationRows = new();
+
+    private string vbcSearchTerm = string.Empty;
+
+    private IEnumerable<ViolationRow> FilteredViolationRows
+    {
+        get
+        {
+            var rows = violationRows.AsEnumerable();
+
+            if (!string.IsNullOrWhiteSpace(vbcSearchTerm))
+            {
+                rows = rows.Where(r =>
+                    r.EventType.Contains(vbcSearchTerm, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return rows;
+        }
+    }
+    // Expand/collapse state
+    private string? expandedRow = null;
+
+    private void ToggleRow(string eventType)
+    {
+        expandedRow = expandedRow == eventType ? null : eventType; 
+    }
+
+    // Summary stats
+    private int GrandTotal => violationRows.Sum(r => r.Total);
+
+    private string TopEventType =>
+        violationRows.Any()
+            ? violationRows.OrderByDescending(r => r.Total).First().EventType
+            : "-";
+
+    private string TopVehicleClass
+    {
+        get
+        {
+            if (!violationRows.Any()) return "-";
+
+            var totals = VehicleClassColumns.ToDictionary(
+                c => c,
+                c => violationRows.Sum(r => r.Values.TryGetValue(c, out var v) ? v : 0));
+
+            var top = totals.OrderByDescending(kv => kv.Value).FirstOrDefault();
+            return top.Value > 0 ? top.Key : "-";
+        }
+    }
+
+    private string GetRowAccentColor(string badgeClass) => badgeClass switch
+    {
+        "wrong-direction" => "#ef4444",
+        "stopped" => "#f97316",
+        _ => "#4f46e5"
+    };
+
+    private class VehicleClassItem
+    {
+        public string Name { get; set; } = string.Empty;
+        public int Count { get; set; }
+        public string Icon { get; set; } = Icons.Material.Filled.DirectionsCar;
+        public string Color { get; set; } = "#4f46e5";
+        public double Percent { get; set; }
+    }
+   
+private async Task ExpandImageMedia()
+{
+    var parameters = new DialogParameters
+    {
+        ["ImageUrl"] = LastTransactionImageUrl,
+        ["Title"] = $"Snapshot - {LastTransactionTime:dd-MMM-yyyy HH:mm:ss}"
+    };
+    
+    var options = new DialogOptions
+    {
+        CloseButton = true,
+        MaxWidth = MaxWidth.Large,
+        FullWidth = true,
+        Position = DialogPosition.Center
+    };
+    
+    await DialogService.ShowAsync<ImagePreviewDialog>("Snapshot", parameters, options);
+}
+private async Task ExpandVideoMedia()
+{
+    var parameters = new DialogParameters
+    {
+        ["VideoUrl"] = LastTransactionVideoUrl,
+        ["Title"] = $"Snapshot - {LastTransactionTime:dd-MMM-yyyy HH:mm:ss}"
+    };
+    
+    var options = new DialogOptions
+    {
+        CloseButton = true,
+        MaxWidth = MaxWidth.Large,
+        FullWidth = true,
+        Position = DialogPosition.Center
+    };
+    
+    await DialogService.ShowAsync<VideoPreviewDialog>("Snapshot", parameters, options);
+}
+
+    private bool sortDescending = true;
+      private List<VehicleClassItem> vehicleClasses = new();
+
+    private int TotalVehicleClassCount => vehicleClasses.Sum(x => x.Count);
+
+    private IEnumerable<VehicleClassItem> SortedVehicleClasses
+    {
+        get
+        {
+            foreach (var item in vehicleClasses)
+            {
+                item.Percent = TotalVehicleClassCount == 0
+                    ? 0
+                    : Math.Round((double)item.Count / TotalVehicleClassCount * 100, 1);
+            }
+
+            return sortDescending
+                ? vehicleClasses.OrderByDescending(x => x.Count)
+                : vehicleClasses.OrderBy(x => x.Count);
+        }
+    }
+
+    private async Task ToggleVehicleClassSort()
+    {
+        sortDescending = !sortDescending;
+        StateHasChanged();
+    }
+
+    private IEnumerable<AverageVehicleCountDto> averageVehicleCount
+        = Enumerable.Empty<AverageVehicleCountDto>();
+
+    private VehicleClassDto? vehicleClass;
+
+    private DeviceStatusDto? deviceStatus;
+
+    private ViolatedVehicleDto? violatedVehicle;
+
+    private IEnumerable<ClassCategoryDto> classCategories
+        = Enumerable.Empty<ClassCategoryDto>();
+
+    private LastTransactionDto? lastTransaction;
+
+    private IEnumerable<PassingVehicleDto> passingVehicles
+        = Enumerable.Empty<PassingVehicleDto>();
+
+    private IEnumerable<ViolationCategoryDto> violationCategories
+        = Enumerable.Empty<ViolationCategoryDto>();
+
+    private IEnumerable<TrafficCountDto> trafficCounts
+        = Enumerable.Empty<TrafficCountDto>();
+
+    private bool isLoading = true;
+
+    private string? errorMessage;
+
+    // ---- Traffic By ChNo card data ----
+    // Replace this with your real data source (e.g. from VidsDataService).
+    private class TrafficByChNoItem
+    {
+        public string LocationCode { get; set; } = string.Empty;
+        public int Count { get; set; }
+    }
+
+    private List<TrafficByChNoItem> TrafficByChNo = new()
+    {
+        new TrafficByChNoItem { LocationCode = " ", Count = 0 },
+        new TrafficByChNoItem { LocationCode = " ", Count = 0 }
+    };
+
+    private string ChNoTotal =>
+        TrafficByChNo.Sum(x => x.Count).ToString("N0");
+
+    // ---- Avg Violation & Violations card data ----
+    // Replace these with your real data source (e.g. from VidsDataService).
+
+
+    private double AvgViolationPerHour = 0;
+    private int ViolatedCount = 0;
+    private int TotalCount = 0;
+
+    private double ViolatedPercent =>
+        TotalCount == 0 ? 0 : Math.Round((double)ViolatedCount / TotalCount * 100, 1);
+
+    private string ViolatedPercentLabel => $"{ViolatedPercent}%";
+
+    protected override async Task OnInitializedAsync()
+{
+    try
+    {
+        isLoading = true;
+
+        await LoadDashboardDataAsync();
+
+        StartLastTransactionPolling();
+        StartAutoRefresh(); // start auto-refresh on load since isAutoRefresh = true by default
+    }
+    catch (Exception ex)
+    {
+        errorMessage = ex.Message;
+    }
+    finally
+    {
+        isLoading = false;
+    }
+}
+
+private async Task LoadDashboardDataAsync()
+{
+    averageVehicleCount = await VidsDataService.GetAverageVehicleCountAsync();
+    vehicleClass = await VidsDataService.GetVehicleClassAsync();
+    deviceStatus = await VidsDataService.GetDeviceStatusAsync();
+    violatedVehicle = await VidsDataService.GetViolatedVehicleAsync();
+    classCategories = await VidsDataService.GetClassCategoryAsync();
+    lastTransaction = await VidsDataService.GetLastTransactionAsync();
+    passingVehicles = await VidsDataService.GetPassingVehiclesAsync();
+    violationCategories = await VidsDataService.GetViolationCategoryAsync();
+    trafficCounts = await VidsDataService.GetTrafficCountAsync();
+
+     MapServiceDataToUiState();
+
+}
+ private void MapServiceDataToUiState()
+    {
+        // ---- Device Status ----
+        OnlineDevices = deviceStatus?.Online ?? 0;
+        OfflineDevices = deviceStatus?.Offline ?? 0;
+
+        // ---- Traffic By ChNo ----
+        TrafficByChNo = trafficCounts
+            .Select(t => new TrafficByChNoItem
+            {
+                LocationCode = t.ChNo ?? "-",
+                Count = t.TrafficCount
+            })
+            .ToList();
+                    // ---- Avg Violation & Violations ----
+        TotalCount = violatedVehicle?.TotalVehicles ?? 0;
+        ViolatedCount = violatedVehicle?.ViolatedVehicles ?? 0;
+        AvgViolationPerHour = ViolatedCount / 24.0; // adjust if a real hourly figure is exposed by the DB
+
+        // ---- Vehicle Class Distribution ----
+        vehicleClasses = new List<VehicleClassItem>
+        {
+            new() { Name = "Bike",    Count = vehicleClass?.Bike    ?? 0, Icon = Icons.Material.Filled.PedalBike,      Color = "#f59e0b" },
+            new() { Name = "Car",     Count = vehicleClass?.Car     ?? 0, Icon = Icons.Material.Filled.DirectionsCar,  Color = "#3b82f6" },
+            new() { Name = "Auto",    Count = vehicleClass?.Auto    ?? 0, Icon = Icons.Material.Filled.LocalTaxi,      Color = "#ef4444" },
+            new() { Name = "Truck",   Count = vehicleClass?.Truck   ?? 0, Icon = Icons.Material.Filled.LocalShipping,  Color = "#10b981" },
+            new() { Name = "LCV",     Count = vehicleClass?.LCV     ?? 0, Icon = Icons.Material.Filled.LocalShipping,  Color = "#0ea5e9" },
+            new() { Name = "Bus",     Count = vehicleClass?.Bus     ?? 0, Icon = Icons.Material.Filled.DirectionsBus,  Color = "#a855f7" },
+            new() { Name = "Pickup",  Count = vehicleClass?.Pickup  ?? 0, Icon = Icons.Material.Filled.AirportShuttle, Color = "#06b6d4" },
+            new() { Name = "Tractor", Count = vehicleClass?.Tractor ?? 0, Icon = Icons.Material.Filled.Agriculture,    Color = "#8b5cf6" },
+            new() { Name = "Others",  Count = vehicleClass?.Others  ?? 0, Icon = Icons.Material.Filled.DirectionsCar,  Color = "#64748b" },
+        };
+
+        // ---- Violation by Category ----
+        violationRows = violationCategories
+            .Select(vc => new ViolationRow
+            {
+                EventType = vc.EventType ?? "Unknown",
+                BadgeClass = GetBadgeClassForEventType(vc.EventType),
+                Values = new Dictionary<string, int>
+                {
+                    ["Auto"] = vc.Auto,
+                    ["Bike"] = vc.Bike,
+                    ["Car"] = vc.Car,
+                    ["LCV"] = vc.LCV,
+                    ["Truck"] = vc.Truck,
+                    ["Bus"] = vc.Bus,
+                    ["Pickup"] = vc.Pickup,
+                    ["Tractor"] = vc.Tractor,
+                    ["Others"] = vc.Others,
+                }
+            })
+            .ToList();
+
+        // ---- Last Transaction ----
+        if (lastTransaction != null)
+        {
+            LastTransactionEventType = lastTransaction.EventType ?? LastTransactionEventType;
+            LastTransactionVehicleClass = lastTransaction.VehicleClass ?? LastTransactionVehicleClass;
+            LastTransactionLocation = lastTransaction.ChNo ?? LastTransactionLocation;
+            LastTransactionTime = lastTransaction.TimeStamp ?? LastTransactionTime;
+            // LastTransactionImageUrl / LastTransactionVideoUrl stay as placeholders until
+            // LastTransactionDto exposes Image/Video columns from the DB.
+        }
+
+        // ---- Recent Vehicles Violation table ----
+        violationEvents = passingVehicles
+            .Select(p => new ViolationEvent
+            {
+                EventType = p.EventType ?? "Unknown",
+                VehicleClass = p.VehicleClass ?? "Unknown",
+                Timestamp = p.TimeStamp ?? DateTime.Now,
+                Location = p.Location ?? "-",
+                ImageUrl = p.Image ?? LastTransactionImageUrl, // PassingVehicleDto has no video column yet
+                VideoUrl = LastTransactionVideoUrl
+            })
+            .ToList();
+    }
+        private string GetBadgeClassForEventType(string? eventType) => eventType?.Trim().ToUpperInvariant() switch
+    {
+        "WRONG DIRECTION" => "wrong-direction",
+        "VEHICLE STOPPED" => "stopped",
+        _ => "default"
+    };
+
+protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var storedTheme = await JS.InvokeAsync<string?>("localStorage.getItem", "vids-theme");
+                if (storedTheme == "dark")
+                {
+                      isDarkMode = true;
+                    StateHasChanged();
+                }
+            }
+            catch
+            {
+                // Ignore storage errors (e.g. private browsing restrictions)
+            }
+        }
+
+        if (averageVehicleCount is not null && averageVehicleCount.Any())
+        {
+            var labels = averageVehicleCount.Select(x => x.Time).ToArray();
+            var data = averageVehicleCount.Select(x => x.TrafficCount).ToArray();
+
+            await JS.InvokeVoidAsync("renderAvtChart", labels, data, isDarkMode);
+        }
+
+        await JS.InvokeVoidAsync("renderViolationDonut", ViolatedPercent, isDarkMode);
+        await JS.InvokeVoidAsync("renderDeviceStatusDonut", OnlineDevices, OfflineDevices, isDarkMode);
+
+        if (firstRender)
+        {
+            var vcLabels = vehicleClasses.Select(x => x.Name).ToArray();
+            var vcData = vehicleClasses.Select(x => x.Count).ToArray();
+            var vcColors = vehicleClasses.Select(x => x.Color).ToArray();
+            await JS.InvokeVoidAsync("renderVehicleClassDonut", vcLabels, vcData, vcColors, isDarkMode);
+        }
+    }
+
+      // ---- Last Transaction card data ----
+    // Image/Video URLs stay as placeholders until the DB exposes those columns
+    // for LastTransaction / PasssingVehicle modes (see VehicleEventDetailsDto.Image/Video).
+    private string LastTransactionImageUrl = "https://images.pexels.com/videos/31654691/4k-drone-4k-drone-footage-aerial-by-drone-crowed-drone-shot-31654691.jpeg?auto=compress&w=1260&h=750";
+    private string LastTransactionVideoUrl = "https://videos.pexels.com/video-files/31654691/13487016_1920_1080_25fps.mp4";
+    private string LastTransactionEventType = "-";
+    private string LastTransactionVehicleClass = "-";
+    private string LastTransactionLocation = "-";
+    private string LastTransactionLocationColor = "#f59e0b";
+    private DateTime LastTransactionTime = DateTime.Now;
+
+
+    private string EventTypeClass => LastTransactionEventType switch
+    {
+        "Wrong direction" => "wrong-direction",
+        "Speed violation" => "speed-violation",
+        _ => "normal"
+    };
+
+    private string EventTypeIcon => LastTransactionEventType switch
+    {
+        "Wrong direction" => Icons.Material.Filled.SyncProblem,
+        "Speed violation" => Icons.Material.Filled.Speed,
+        _ => Icons.Material.Filled.CheckCircle
+    };
+
+    private Timer? lastTransactionTimer;
+
+    private void StartLastTransactionPolling()
+    {
+        // Demo-only simulation. Replace with a SignalR hub subscription
+        // or a periodic call to VidsDataService.GetLastTransactionAsync().
+        lastTransactionTimer = new Timer(async _ =>
+        {
+            // Example real hookup:
+            // var latest = await VidsDataService.GetLastTransactionAsync();
+            // LastTransactionImageUrl = latest.ImageUrl;
+            // LastTransactionVideoUrl = latest.VideoUrl;
+            // LastTransactionEventType = latest.EventType;
+            // LastTransactionVehicleClass = latest.VehicleClass;
+            // LastTransactionLocation = latest.Location;
+            // LastTransactionTime = latest.Timestamp;
+
+            LastTransactionTime = DateTime.Now;
+
+            await InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
+    }
+
+    private string GetPeakHour()
+    {
+        if (averageVehicleCount is null || !averageVehicleCount.Any()) return "-";
+        var peak = averageVehicleCount.OrderByDescending(x => x.TrafficCount).First();
+        return peak.Time;
+    }
+
+    private string GetPeakValue()
+    {
+        if (averageVehicleCount is null || !averageVehicleCount.Any()) return "0";
+        return averageVehicleCount.Max(x => x.TrafficCount).ToString();
+    }
+
+    private string GetAverage()
+    {
+        if (averageVehicleCount is null || !averageVehicleCount.Any()) return "0";
+        return averageVehicleCount.Average(x => x.TrafficCount).ToString("0.0");
+    }
+
+// ---- Auto-Refresh ----
+private bool isAutoRefresh = true;
+private int autoRefreshInterval = 30; // seconds
+private PeriodicTimer? autoRefreshTimer;
+private CancellationTokenSource? autoRefreshCts;
+private Task? autoRefreshLoopTask;
+private DateTime lastRefreshTime = DateTime.Now;
+
+private async Task ToggleAutoRefresh()
+{
+    isAutoRefresh = !isAutoRefresh;
+
+    if (isAutoRefresh)
+    {
+        StartAutoRefresh();
+    }
+    else
+    {
+        StopAutoRefresh();
+    }
+
+    StateHasChanged();
+}
+
+private void StopAutoRefresh()
+{
+    autoRefreshCts?.Cancel();
+    autoRefreshTimer?.Dispose();
+    autoRefreshTimer = null;
+    autoRefreshCts?.Dispose();
+    autoRefreshCts = null;
+}
+
+private void RestartAutoRefresh()
+{
+    if (isAutoRefresh)
+    {
+        StartAutoRefresh();
+    }
+}
+
+private void StartAutoRefresh()
+{
+    StopAutoRefresh(); // Ensure any existing loop is stopped
+
+    autoRefreshCts = new CancellationTokenSource();
+    autoRefreshTimer = new PeriodicTimer(TimeSpan.FromSeconds(autoRefreshInterval));
+
+    autoRefreshLoopTask = RunAutoRefreshLoopAsync(autoRefreshTimer, autoRefreshCts.Token);
+}
+
+private async Task RunAutoRefreshLoopAsync(PeriodicTimer timer, CancellationToken token)
+{
+    try
+    {
+        while (await timer.WaitForNextTickAsync(token))
+        {
+            try
+            {
+                await LoadDashboardDataAsync();
+                lastRefreshTime = DateTime.Now;
+                errorMessage = null; // clear any previous error once a refresh succeeds
+
+                await InvokeAsync(async () =>
+                {
+                    await RerenderChartsForTheme();
+                    StateHasChanged();
+                });
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Auto-refresh failed: {ex.Message}";
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+    catch (OperationCanceledException)
+    {
+        // Expected when StopAutoRefresh/Dispose cancels the loop
+    }
+
+}
+
+// IDisposable implementation
+public void Dispose()
+{
+    lastTransactionTimer?.Dispose();
+    StopAutoRefresh();
+    GC.SuppressFinalize(this);
+        {
+            SidebarState.OnChange -= StateHasChanged;
+        }
+}
+
+
+    // Sidebar toggle button
+    protected override void OnInitialized()
+    {
+        SidebarState.OnChange += StateHasChanged;
+    }
+ 
+
+}
+ 

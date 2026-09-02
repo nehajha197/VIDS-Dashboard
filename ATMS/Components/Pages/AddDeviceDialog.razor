@@ -1,0 +1,78 @@
+﻿@using MudBlazor
+@using ATMS.DTOs
+
+<MudDialog>
+    <TitleContent>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <MudIcon Icon="@Icons.Material.Filled.AddLocationAlt" Color="Color.Primary" />
+            <span>Add Device</span>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudGrid>
+            <MudItem xs="6">
+                <MudTextField T="double" Label="Latitude" @bind-Value="Device.Latitude" ReadOnly="true" />
+            </MudItem>
+            <MudItem xs="6">
+                <MudTextField T="double" Label="Longitude" @bind-Value="Device.Longitude" ReadOnly="true" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField T="string" Label="Device Name (e.g. 90+000)" @bind-Value="Device.Name" Required="true" />
+            </MudItem>
+
+            <MudItem xs="6">
+                <MudSelect T="string" Label="Device Type" @bind-Value="Device.DeviceType" Required="true">
+                    <MudSelectItem Value="@("ATCC")">ATCC</MudSelectItem>
+                    <MudSelectItem Value="@("ECB")">ECB</MudSelectItem>
+                    <MudSelectItem Value="@("TMCS")">TMCS</MudSelectItem>
+                    <MudSelectItem Value="@("VIDES")">VIDES</MudSelectItem>
+                    <MudSelectItem Value="@("VIDS")">VIDS</MudSelectItem>
+                    <MudSelectItem Value="@("VMS")">VMS</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="6">
+                <MudSelect T="string" Label="Direction" @bind-Value="Device.Direction" Required="true">
+                    <MudSelectItem Value="@("LHS")">LHS</MudSelectItem>
+                    <MudSelectItem Value="@("RHS")">RHS</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="6">
+                <MudTextField T="string" Label="Device IP / Endpoint" @bind-Value="Device.DeviceEndpoint" Required="true" />
+            </MudItem>
+
+            <MudItem xs="6">
+                <MudSelect T="string" Label="Status" @bind-Value="Device.Status" Required="true">
+                    <MudSelectItem Value="@("Online")">Online</MudSelectItem>
+                    <MudSelectItem Value="@("Offline")">Offline</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save">Save Device</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public AtmsDeviceCreateDto Device { get; set; } = new();
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Save()
+    {
+        if (string.IsNullOrWhiteSpace(Device.Name) ||
+            string.IsNullOrWhiteSpace(Device.DeviceType) ||
+            string.IsNullOrWhiteSpace(Device.DeviceEndpoint) ||
+            string.IsNullOrWhiteSpace(Device.Direction))
+        {
+            return; // MudBlazor form validation could be added for nicer feedback
+        }
+
+        MudDialog.Close(DialogResult.Ok(Device));
+    }
+}
